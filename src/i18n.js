@@ -188,11 +188,8 @@ const translations = {
 
     // Update
     'update.available': '新しいバージョン {0} が利用可能です。',
-    'update.download': 'ダウンロード',
+    'update.open_release': 'ダウンロードページを開く',
     'update.later': '後で',
-    'update.downloading': 'アップデートをダウンロード中...',
-    'update.ready': 'アップデートをダウンロードしました。再起動してインストールします。',
-    'update.restart': '今すぐ再起動',
 
     // Help
     'nav.help': 'ヘルプ',
@@ -391,11 +388,8 @@ const translations = {
     'offline.banner': 'Offline mode — History view only',
 
     'update.available': 'New version {0} is available.',
-    'update.download': 'Download',
+    'update.open_release': 'Open download page',
     'update.later': 'Later',
-    'update.downloading': 'Downloading update...',
-    'update.ready': 'Update downloaded. Restart to install.',
-    'update.restart': 'Restart Now',
 
     'nav.help': 'Help',
     'help.title': 'User Guide',

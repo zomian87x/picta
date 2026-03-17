@@ -1426,35 +1426,22 @@ function showToast(message, type = 'success') {
 
 // ── Auto Update ──
 function setupAutoUpdate() {
-  window.api.onUpdateAvailable((version) => {
+  window.api.onUpdateAvailable((version, releaseUrl) => {
     const banner = document.createElement('div');
     banner.className = 'update-banner';
     banner.id = 'update-banner';
     banner.innerHTML = `
       <span>${t('update.available', escapeHtml(version))}</span>
-      <button class="btn btn-primary" id="update-download-btn">${t('update.download')}</button>
+      <button class="btn btn-primary" id="update-open-btn">${t('update.open_release')}</button>
       <button class="btn btn-secondary" id="update-dismiss-btn">${t('update.later')}</button>
     `;
     document.body.appendChild(banner);
 
-    $('#update-download-btn').addEventListener('click', () => {
-      window.api.downloadUpdate();
-      banner.innerHTML = `<span>${t('update.downloading')}</span><span class="spinner"></span>`;
+    $('#update-open-btn').addEventListener('click', () => {
+      window.api.openReleasePage(releaseUrl);
+      banner.remove();
     });
     $('#update-dismiss-btn').addEventListener('click', () => banner.remove());
-  });
-
-  window.api.onUpdateDownloaded(() => {
-    const banner = $('#update-banner');
-    if (banner) {
-      banner.innerHTML = `
-        <span>${t('update.ready')}</span>
-        <button class="btn btn-primary" id="update-install-btn">${t('update.restart')}</button>
-        <button class="btn btn-secondary" id="update-later-btn">${t('update.later')}</button>
-      `;
-      $('#update-install-btn').addEventListener('click', () => window.api.installUpdate());
-      $('#update-later-btn').addEventListener('click', () => banner.remove());
-    }
   });
 }
 

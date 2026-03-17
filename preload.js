@@ -68,8 +68,6 @@ contextBridge.exposeInMainWorld('api', {
 
   // Auto-update
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
-  downloadUpdate: () => ipcRenderer.invoke('download-update'),
-  installUpdate: () => ipcRenderer.invoke('install-update'),
-  onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (_e, version) => callback(version)),
-  onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', () => callback()),
+  openReleasePage: (url) => ipcRenderer.invoke('open-release-page', url),
+  onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (_e, version, url) => callback(version, url)),
 });

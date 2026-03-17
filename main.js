@@ -4,7 +4,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const Store = require('electron-store');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-let autoUpdater = null;
+const GITHUB_REPO = 'zomian87x/picta';
 
 const isMac = process.platform === 'darwin';
 const isWin = process.platform === 'win32';
@@ -628,54 +628,43 @@ ipcMain.handle('resize-image', (_event, base64, mimeType, maxLongEdge) => {
   }
 });
 
-// ── Auto Updater ──
-function initAutoUpdater() {
+// ── Update Check (GitHub Releases) ──
+async function checkForUpdateFromGitHub() {
   try {
-    autoUpdater = require('electron-updater').autoUpdater;
-  } catch (err) {
-    console.log('electron-updater not available:', err.message);
-    return;
+    const { net } = require('electron');
+    const url = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+    const response = await net.fetch(url, {
+      headers: { 'Accept': 'application/vnd.github.v3+json' },
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const latestVersion = (data.tag_name || '').replace(/^v/, '');
+    const currentVersion = app.getVersion();
+    if (latestVersion && latestVersion !== currentVersion) {
+      return { version: latestVersion, url: data.html_url };
+    }
+    return null;
+  } catch {
+    return null;
   }
-  autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = true;
+}
 
-  autoUpdater.on('update-available', (info) => {
-    if (mainWindow) {
-      mainWindow.webContents.send('update-available', info.version);
+function initAutoUpdater() {
+  setTimeout(async () => {
+    const update = await checkForUpdateFromGitHub();
+    if (update && mainWindow) {
+      mainWindow.webContents.send('update-available', update.version, update.url);
     }
-  });
-
-  autoUpdater.on('update-downloaded', () => {
-    if (mainWindow) {
-      mainWindow.webContents.send('update-downloaded');
-    }
-  });
-
-  autoUpdater.on('error', (err) => {
-    // Silently ignore update errors (no network, no release, etc.)
-    console.log('Auto-updater error:', err.message);
-  });
-
-  // Check for updates after a short delay
-  setTimeout(() => {
-    autoUpdater.checkForUpdates().catch(() => {});
   }, 5000);
 }
 
 ipcMain.handle('check-for-updates', async () => {
-  if (!autoUpdater) return null;
-  try {
-    const result = await autoUpdater.checkForUpdates();
-    return result?.updateInfo?.version || null;
-  } catch {
-    return null;
+  const update = await checkForUpdateFromGitHub();
+  return update ? update.version : null;
+});
+
+ipcMain.handle('open-release-page', async (_event, url) => {
+  if (typeof url === 'string' && url.startsWith('https://github.com/')) {
+    await shell.openExternal(url);
   }
-});
-
-ipcMain.handle('download-update', () => {
-  if (autoUpdater) autoUpdater.downloadUpdate().catch(() => {});
-});
-
-ipcMain.handle('install-update', () => {
-  if (autoUpdater) autoUpdater.quitAndInstall(false, true);
 });
