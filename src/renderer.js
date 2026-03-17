@@ -2,6 +2,14 @@
  * Picta — Renderer Process
  */
 
+// ── Global Error Handlers ──
+window.addEventListener('error', (e) => {
+  window.api?.logError(e.message, e.error?.stack);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  window.api?.logError(e.reason?.message || 'Unhandled rejection', e.reason?.stack);
+});
+
 // ── State ──
 let config = {};
 let generatedImages = []; // [{base64, mimeType}]

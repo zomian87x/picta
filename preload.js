@@ -42,6 +42,10 @@ contextBridge.exposeInMainWorld('api', {
   generateImage: (params) => ipcRenderer.invoke('generate-image', params),
   editImage: (params) => ipcRenderer.invoke('edit-image', params),
 
+  // Logging
+  logError: (message, stack) => ipcRenderer.invoke('log-error', message, stack),
+  getLogPath: () => ipcRenderer.invoke('get-log-path'),
+
   // External
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
 

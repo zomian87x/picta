@@ -12,7 +12,9 @@ const isWin = process.platform === 'win32';
 // ── Gemini ──
 const { MODEL_ALIASES, ASPECT_RATIOS, resolveModel, extractImage } = require('./src/lib/models');
 const { computeResizeDimensions } = require('./src/lib/image-utils');
+const { Logger } = require('./src/lib/logger');
 
+let logger;
 let store;
 let historyStore;
 
@@ -169,9 +171,18 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  logger = new Logger(path.join(app.getPath('userData'), 'logs'));
+  logger.info('App started', { version: app.getVersion(), platform: process.platform });
   initStores();
   createWindow();
   initAutoUpdater();
+});
+
+process.on('uncaughtException', (err) => {
+  if (logger) logger.error('Uncaught exception', { message: err.message, stack: err.stack });
+});
+process.on('unhandledRejection', (reason) => {
+  if (logger) logger.error('Unhandled rejection', { message: reason?.message, stack: reason?.stack });
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
@@ -331,46 +342,58 @@ nativeTheme.on('updated', () => {
 
 // ── Gemini Generation ──
 ipcMain.handle('generate-image', async (_event, { prompt, aspectRatio, imageSize, modelAlias }) => {
-  const apiKey = getApiKey();
-  if (!apiKey) return { image: null, text: 'API key not set' };
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const { model: modelId } = resolveModel(modelAlias);
-  const model = genAI.getGenerativeModel({
-    model: modelId,
-    generationConfig: {
-      responseModalities: ['image', 'text'],
-      imageConfig: {
-        imageSize: imageSize,
-        aspectRatio: ASPECT_RATIOS[aspectRatio] || '16:9',
+  try {
+    const apiKey = getApiKey();
+    if (!apiKey) return { image: null, text: 'API key not set' };
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const models = store.get('models', MODEL_ALIASES);
+    const { model: modelId } = resolveModel(modelAlias, models);
+    const model = genAI.getGenerativeModel({
+      model: modelId,
+      generationConfig: {
+        responseModalities: ['image', 'text'],
+        imageConfig: {
+          imageSize: imageSize,
+          aspectRatio: ASPECT_RATIOS[aspectRatio] || '16:9',
+        },
       },
-    },
-  });
-  const result = await model.generateContent(`Generate an image: ${prompt}`);
-  return extractImage(result.response);
+    });
+    const result = await model.generateContent(`Generate an image: ${prompt}`);
+    return extractImage(result.response);
+  } catch (e) {
+    if (logger) logger.error('generate-image failed', { message: e.message, stack: e.stack });
+    throw e;
+  }
 });
 
 ipcMain.handle('edit-image', async (_event, { images, prompt, aspectRatio, imageSize, modelAlias }) => {
-  const apiKey = getApiKey();
-  if (!apiKey) return { image: null, text: 'API key not set' };
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const { model: modelId } = resolveModel(modelAlias);
-  const model = genAI.getGenerativeModel({
-    model: modelId,
-    generationConfig: {
-      responseModalities: ['image', 'text'],
-      imageConfig: {
-        imageSize: imageSize,
-        aspectRatio: ASPECT_RATIOS[aspectRatio] || '16:9',
+  try {
+    const apiKey = getApiKey();
+    if (!apiKey) return { image: null, text: 'API key not set' };
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const models = store.get('models', MODEL_ALIASES);
+    const { model: modelId } = resolveModel(modelAlias, models);
+    const model = genAI.getGenerativeModel({
+      model: modelId,
+      generationConfig: {
+        responseModalities: ['image', 'text'],
+        imageConfig: {
+          imageSize: imageSize,
+          aspectRatio: ASPECT_RATIOS[aspectRatio] || '16:9',
+        },
       },
-    },
-  });
-  const parts = [];
-  for (const img of images) {
-    parts.push({ inlineData: { mimeType: img.mimeType || 'image/png', data: img.base64 } });
+    });
+    const parts = [];
+    for (const img of images) {
+      parts.push({ inlineData: { mimeType: img.mimeType || 'image/png', data: img.base64 } });
+    }
+    parts.push({ text: `Edit this image: ${prompt}` });
+    const result = await model.generateContent(parts);
+    return extractImage(result.response);
+  } catch (e) {
+    if (logger) logger.error('edit-image failed', { message: e.message, stack: e.stack });
+    throw e;
   }
-  parts.push({ text: `Edit this image: ${prompt}` });
-  const result = await model.generateContent(parts);
-  return extractImage(result.response);
 });
 
 // Open external link (allowlist: https only)
@@ -382,6 +405,15 @@ ipcMain.handle('open-external', (_event, url) => {
     }
   } catch { /* invalid URL */ }
   return false;
+});
+
+// Renderer error logging
+ipcMain.handle('log-error', (_event, message, stack) => {
+  if (logger) logger.error(message, { source: 'renderer', stack });
+});
+
+ipcMain.handle('get-log-path', () => {
+  return path.join(app.getPath('userData'), 'logs', 'picta.log');
 });
 
 // Platform info
