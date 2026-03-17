@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld('api', {
   addHistory: (entry) => ipcRenderer.invoke('add-history', entry),
   clearHistory: () => ipcRenderer.invoke('clear-history'),
   toggleHistoryFavorite: (timestamp) => ipcRenderer.invoke('toggle-history-favorite', timestamp),
+  updateHistoryTags: (timestamp, tags) => ipcRenderer.invoke('update-history-tags', timestamp, tags),
+  getAllTags: () => ipcRenderer.invoke('get-all-tags'),
 
   // File
   selectSavePath: () => ipcRenderer.invoke('select-save-path'),

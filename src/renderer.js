@@ -792,9 +792,11 @@ function showCanvasLoadSlotPicker() {
 // ── History ──
 let historyEntries = [];
 let showFavoritesOnly = false;
+let activeTagFilter = null;
 
 async function loadHistory() {
   historyEntries = await window.api.getHistory();
+  renderTagFilter();
   renderHistoryGrid();
 }
 
@@ -805,9 +807,12 @@ function renderHistoryGrid() {
   // Remove old cards but keep empty state element
   grid.querySelectorAll('.history-card').forEach(c => c.remove());
 
-  const filtered = showFavoritesOnly
+  let filtered = showFavoritesOnly
     ? historyEntries.filter(e => e.favorite)
-    : historyEntries;
+    : [...historyEntries];
+  if (activeTagFilter) {
+    filtered = filtered.filter(e => e.tags && e.tags.includes(activeTagFilter));
+  }
 
   if (filtered.length === 0) {
     empty.classList.remove('hidden');
@@ -834,6 +839,7 @@ function renderHistoryGrid() {
         </div>
         <div class="prompt-preview">${escapeHtml(entry.prompt)}</div>
         <span class="model-badge">${escapeHtml(entry.modelAlias)}</span>
+        ${entry.tags && entry.tags.length > 0 ? `<div class="tag-badges">${entry.tags.map(t => `<span class="tag-chip">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
       </div>
     `;
 
@@ -848,6 +854,83 @@ function renderHistoryGrid() {
     card.addEventListener('click', () => openHistoryDetail(entry));
     grid.appendChild(card);
   }
+}
+
+function renderTagFilter() {
+  const container = $('#history-tag-filter');
+  if (!container) return;
+  container.innerHTML = '';
+
+  // Collect all tags
+  const tagSet = new Set();
+  for (const e of historyEntries) {
+    if (e.tags) e.tags.forEach(t => tagSet.add(t));
+  }
+  if (tagSet.size === 0) return;
+
+  // "All" chip
+  const allChip = document.createElement('span');
+  allChip.className = `tag-chip ${!activeTagFilter ? 'active' : ''}`;
+  allChip.textContent = t('history.all_tags');
+  allChip.addEventListener('click', () => {
+    activeTagFilter = null;
+    renderTagFilter();
+    renderHistoryGrid();
+  });
+  container.appendChild(allChip);
+
+  for (const tag of [...tagSet].sort()) {
+    const chip = document.createElement('span');
+    chip.className = `tag-chip ${activeTagFilter === tag ? 'active' : ''}`;
+    chip.textContent = tag;
+    chip.addEventListener('click', () => {
+      activeTagFilter = activeTagFilter === tag ? null : tag;
+      renderTagFilter();
+      renderHistoryGrid();
+    });
+    container.appendChild(chip);
+  }
+}
+
+function renderTagEditor(entry) {
+  const chips = $('#tag-chips');
+  chips.innerHTML = '';
+  const tags = entry.tags || [];
+  for (const tag of tags) {
+    const chip = document.createElement('span');
+    chip.className = 'tag-chip';
+    chip.innerHTML = `${escapeHtml(tag)} <span class="tag-remove">&times;</span>`;
+    chip.querySelector('.tag-remove').addEventListener('click', async () => {
+      entry.tags = entry.tags.filter(t => t !== tag);
+      await window.api.updateHistoryTags(entry.timestamp, entry.tags);
+      renderTagEditor(entry);
+      renderTagFilter();
+      renderHistoryGrid();
+    });
+    chips.appendChild(chip);
+  }
+
+  const input = $('#tag-input');
+  // Replace to clear old listeners
+  const newInput = input.cloneNode(true);
+  input.parentNode.replaceChild(newInput, input);
+  newInput.value = '';
+  newInput.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const val = newInput.value.trim().replace(/,/g, '');
+      if (!val) return;
+      if (!entry.tags) entry.tags = [];
+      if (!entry.tags.includes(val)) {
+        entry.tags.push(val);
+        await window.api.updateHistoryTags(entry.timestamp, entry.tags);
+        renderTagEditor(entry);
+        renderTagFilter();
+        renderHistoryGrid();
+      }
+      newInput.value = '';
+    }
+  });
 }
 
 // Favorites filter toggle
@@ -933,6 +1016,9 @@ function openHistoryDetail(entry) {
 
   promptEl.textContent = entry.prompt;
   promptEl.dataset.prompt = entry.prompt;
+
+  // Render tag editor
+  renderTagEditor(entry);
 
   // Update favorite button state
   updateDetailFavButton(entry);

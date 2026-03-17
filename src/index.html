@@ -145,6 +145,7 @@
               <button class="btn btn-secondary" id="history-clear" data-i18n="history.clear_all"></button>
             </div>
           </div>
+          <div class="history-tag-filter" id="history-tag-filter"></div>
           <div class="history-grid" id="history-grid">
             <div class="empty-state" id="history-empty">
               <div class="icon" data-i18n="history.empty_icon"></div>
@@ -375,6 +376,13 @@
         <div class="history-detail-info">
           <div class="history-detail-meta" id="history-detail-meta"></div>
           <div class="history-detail-prompt" id="history-detail-prompt"></div>
+          <div class="history-detail-tags">
+            <label data-i18n="history.tags"></label>
+            <div class="tag-editor" id="tag-editor">
+              <div class="tag-chips" id="tag-chips"></div>
+              <input type="text" id="tag-input" data-i18n-placeholder="history.tag_placeholder" class="tag-input">
+            </div>
+          </div>
           <div class="history-detail-actions">
             <button class="btn btn-secondary" id="history-detail-fav" data-i18n="history.favorite"></button>
             <button class="btn btn-primary" id="history-reuse-prompt" data-i18n="history.reuse_prompt"></button>

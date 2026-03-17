@@ -281,6 +281,26 @@ ipcMain.handle('toggle-history-favorite', (_event, timestamp) => {
   return false;
 });
 
+ipcMain.handle('update-history-tags', (_event, timestamp, tags) => {
+  const entries = historyStore.get('entries');
+  const entry = entries.find(e => e.timestamp === timestamp);
+  if (entry) {
+    entry.tags = tags;
+    historyStore.set('entries', entries);
+    return true;
+  }
+  return false;
+});
+
+ipcMain.handle('get-all-tags', () => {
+  const entries = historyStore.get('entries');
+  const tagSet = new Set();
+  for (const e of entries) {
+    if (e.tags) e.tags.forEach(t => tagSet.add(t));
+  }
+  return [...tagSet].sort();
+});
+
 // File dialogs
 ipcMain.handle('select-save-path', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
