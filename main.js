@@ -10,43 +10,8 @@ const isMac = process.platform === 'darwin';
 const isWin = process.platform === 'win32';
 
 // ── Gemini ──
-const MODEL_ALIASES = {
-  'nano banana': { model: 'gemini-3-pro-image-preview', thinkingLevel: null },
-  'nanobanana 2': { model: 'gemini-3.1-flash-image-preview', thinkingLevel: 'MINIMAL' },
-  'nano banana pro': { model: 'gemini-3-pro-image-preview', thinkingLevel: null },
-};
-
-const ASPECT_RATIOS = {
-  '1:1': '1:1', '2:3': '2:3', '3:2': '3:2',
-  '4:3': '4:3', '3:4': '3:4', '16:9': '16:9', '9:16': '9:16',
-};
-
-function resolveModel(aliasName) {
-  return MODEL_ALIASES[aliasName] || MODEL_ALIASES['nanobanana 2'];
-}
-
-function extractImage(response) {
-  try {
-    const candidates = response.candidates;
-    if (!candidates || candidates.length === 0) {
-      return { image: null, text: 'No response from model' };
-    }
-    const parts = candidates[0].content.parts;
-    let imageData = null;
-    let textData = '';
-    for (const part of parts) {
-      if (part.inlineData) {
-        imageData = { base64: part.inlineData.data, mimeType: part.inlineData.mimeType };
-      }
-      if (part.text) {
-        textData += part.text;
-      }
-    }
-    return { image: imageData, text: textData };
-  } catch (e) {
-    return { image: null, text: `Error extracting image: ${e.message}` };
-  }
-}
+const { MODEL_ALIASES, ASPECT_RATIOS, resolveModel, extractImage } = require('./src/lib/models');
+const { computeResizeDimensions } = require('./src/lib/image-utils');
 
 let store;
 let historyStore;
@@ -438,13 +403,10 @@ ipcMain.handle('resize-image', (_event, base64, mimeType, maxLongEdge) => {
     const buffer = Buffer.from(base64, 'base64');
     const img = nativeImage.createFromBuffer(buffer);
     const { width, height } = img.getSize();
-    const longEdge = Math.max(width, height);
-    if (longEdge <= maxLongEdge) {
+    const { newW, newH, needsResize } = computeResizeDimensions(width, height, maxLongEdge);
+    if (!needsResize) {
       return { base64, mimeType, resized: false };
     }
-    const scale = maxLongEdge / longEdge;
-    const newW = Math.round(width * scale);
-    const newH = Math.round(height * scale);
     const resized = img.resize({ width: newW, height: newH, quality: 'best' });
     const outBuffer = mimeType === 'image/jpeg' ? resized.toJPEG(90) : resized.toPNG();
     return { base64: outBuffer.toString('base64'), mimeType, resized: true };

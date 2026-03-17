@@ -9,7 +9,9 @@
     "build:mac:release": "electron-builder --mac -c.mac.forceCodeSigning=true",
     "build:win": "electron-builder --win",
     "build:all": "electron-builder --mac --win",
-    "pack": "electron-builder --dir"
+    "pack": "electron-builder --dir",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "gemini",
@@ -21,7 +23,8 @@
   "type": "commonjs",
   "devDependencies": {
     "electron": "^35.7.5",
-    "electron-builder": "^26.8.1"
+    "electron-builder": "^26.8.1",
+    "vitest": "^3.1.1"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -59,7 +62,9 @@
       "main.js",
       "preload.js",
       "src/**/*",
-      "assets/**/*"
+      "assets/**/*",
+      "!tests",
+      "!vitest.config.js"
     ]
   }
 }

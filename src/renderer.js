@@ -362,17 +362,9 @@ function insertMention(label, matchStart, cursorPos) {
   dropdown.classList.add('hidden');
 }
 
-function transformMentionsForApi(prompt) {
-  return prompt.replace(/@(\S+)/g, (match, label) => {
-    const slot = imageSlots.find(s => s.label === label);
-    if (slot && slot.base64) {
-      const lang = getLanguage();
-      return lang === 'ja'
-        ? `「${label}」の画像`
-        : `the image labeled '${label}'`;
-    }
-    return match;
-  });
+// transformMentionsForApi is provided by lib/renderer-utils.js
+function transformMentionsForApiLocal(prompt) {
+  return transformMentionsForApi(prompt, imageSlots, getLanguage());
 }
 
 // ── Generation ──
@@ -398,7 +390,7 @@ async function handleGenerate() {
     return;
   }
 
-  const prompt = transformMentionsForApi(rawPrompt);
+  const prompt = transformMentionsForApiLocal(rawPrompt);
   const modelAlias = config.modelAlias;
   const count = parseInt($('#count-select').value);
   const aspectRatio = $('#aspect-select').value;
@@ -784,17 +776,7 @@ function showCanvasLoadSlotPicker() {
   setTimeout(() => document.addEventListener('click', close), 0);
 }
 
-function computeCanvasDims(aspectRatio, resolution) {
-  const resPixels = { '1K': 1000000, '2K': 2000000, '4K': 8000000 };
-  const ratios = { '1:1': [1,1], '16:9': [16,9], '3:2': [3,2], '2:3': [2,3], '9:16': [9,16], '4:3': [4,3], '3:4': [3,4] };
-  const target = resPixels[resolution] || 1000000;
-  const [wr, hr] = ratios[aspectRatio] || [16, 9];
-  const r = wr / hr;
-  const h = Math.sqrt(target / r);
-  const w = h * r;
-  const round64 = (x) => Math.max(64, Math.round(x / 64) * 64);
-  return { w: round64(w), h: round64(h) };
-}
+// computeCanvasDims is provided by lib/renderer-utils.js
 
 // ── History ──
 let historyEntries = [];
@@ -1255,15 +1237,7 @@ function showToast(message, type = 'success') {
 }
 
 // ── Utility ──
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-function escapeAttr(str) {
-  return str.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+// escapeHtml, escapeAttr, computeCanvasDims are provided by lib/renderer-utils.js
 
 // ── Auto Update ──
 function setupAutoUpdate() {
