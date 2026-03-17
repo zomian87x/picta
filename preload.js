@@ -15,8 +15,6 @@ contextBridge.exposeInMainWorld('api', {
 
   // Models
   getModels: () => ipcRenderer.invoke('get-models'),
-  saveModel: (name, modelConfig) => ipcRenderer.invoke('save-model', name, modelConfig),
-  deleteModel: (name) => ipcRenderer.invoke('delete-model', name),
 
   // History
   getHistory: () => ipcRenderer.invoke('get-history'),

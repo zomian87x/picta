@@ -61,7 +61,16 @@ npm run build:all
 ```
 
 macOS の公開配布用コード署名と notarization については [docs/macos-signing-notarization.md](docs/macos-signing-notarization.md) を参照してください。
-GitHub Actions での自動リリース用 workflow は [`.github/workflows/release-macos.yml`](/Users/ibuki/Projects/active/picta/.github/workflows/release-macos.yml) です。
+GitHub Actions での自動リリース用 workflow は [`.github/workflows/release-macos.yml`](.github/workflows/release-macos.yml) です。
+
+## インストール（macOS）
+
+現在、コード署名なしで配布しています。初回起動前にターミナルで以下を実行してください：
+
+```bash
+sudo xattr -cr /Applications/Picta.app
+sudo codesign --force --deep --sign - /Applications/Picta.app
+```
 
 ## 動作要件
 

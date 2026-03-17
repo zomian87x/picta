@@ -13,6 +13,21 @@ const isWin = process.platform === 'win32';
 const { MODEL_ALIASES, ASPECT_RATIOS, resolveModel, extractImage } = require('./src/lib/models');
 const { computeResizeDimensions } = require('./src/lib/image-utils');
 const { Logger } = require('./src/lib/logger');
+const {
+  validateConfigSet,
+  validateApiKey,
+  validatePresetInput,
+  validateDeleteName,
+  validateModelInput,
+  validateHistoryEntry,
+  validateHistoryTagsUpdate,
+  validateGenerateRequest,
+  validateEditRequest,
+  validateSaveImageRequest,
+  validateResizeRequest,
+  validateAutoSavePayload,
+  toSafePathSegment,
+} = require('./src/lib/ipc-validation');
 
 let logger;
 let store;
@@ -31,8 +46,8 @@ function initStores() {
       notificationSoundType: 'default',
       defaultSavePath: app.getPath('pictures'),
       maxInputLongEdge: 2048,
-      autoSaveGenerated: false,
-      saveMetadata: false,
+      autoSaveGenerated: true,
+      saveMetadata: true,
       saveSourceImages: false,
       organizeByTag: false,
       models: {
@@ -56,6 +71,25 @@ let mainWindow;
 
 // Approved save paths from dialog (token -> filePath)
 const approvedSavePaths = new Map();
+
+function rejectIpc(channel, err, meta = {}) {
+  if (logger) {
+    logger.warn(`Rejected IPC request: ${channel}`, {
+      message: err?.message || String(err),
+      ...meta,
+    });
+  }
+}
+
+function sanitizeDefaultFileName(defaultName) {
+  const fallback = 'picta-output.png';
+  if (typeof defaultName !== 'string' || defaultName.trim() === '') {
+    return fallback;
+  }
+  const baseName = path.basename(defaultName.trim());
+  const cleaned = baseName.replace(/[<>:"/\\|?*\x00-\x1F]/g, '-').slice(0, 120);
+  return cleaned || fallback;
+}
 
 function getApiKey() {
   try {
@@ -221,57 +255,73 @@ ipcMain.handle('get-config', () => {
 });
 
 ipcMain.handle('set-config', (_event, key, value) => {
-  if (key === 'theme') {
-    nativeTheme.themeSource = value === 'system' ? 'system' : value;
+  try {
+    const validated = validateConfigSet(key, value);
+    if (validated.key === 'theme') {
+      nativeTheme.themeSource = validated.value === 'system' ? 'system' : validated.value;
+    }
+    store.set(validated.key, validated.value);
+    return true;
+  } catch (err) {
+    rejectIpc('set-config', err, { key });
+    return false;
   }
-  store.set(key, value);
-  return true;
 });
 
 // API Key
 ipcMain.handle('set-api-key', (_event, key) => {
-  return setApiKey(key);
+  try {
+    return setApiKey(validateApiKey(key));
+  } catch (err) {
+    rejectIpc('set-api-key', err);
+    return { ok: false, reason: 'save-failed' };
+  }
 });
 
 // Prompt presets
 ipcMain.handle('get-presets', () => store.get('promptPresets'));
 ipcMain.handle('save-preset', (_event, name, prompt) => {
-  const presets = store.get('promptPresets');
-  presets[name] = prompt;
-  store.set('promptPresets', presets);
-  return presets;
+  try {
+    const validated = validatePresetInput(name, prompt);
+    const presets = { ...store.get('promptPresets') };
+    presets[validated.name] = validated.prompt;
+    store.set('promptPresets', presets);
+    return presets;
+  } catch (err) {
+    rejectIpc('save-preset', err);
+    return store.get('promptPresets');
+  }
 });
 ipcMain.handle('delete-preset', (_event, name) => {
-  const presets = store.get('promptPresets');
-  delete presets[name];
-  store.set('promptPresets', presets);
-  return presets;
+  try {
+    const safeName = validateDeleteName(name, 'preset name');
+    const presets = { ...store.get('promptPresets') };
+    delete presets[safeName];
+    store.set('promptPresets', presets);
+    return presets;
+  } catch (err) {
+    rejectIpc('delete-preset', err);
+    return store.get('promptPresets');
+  }
 });
 
 // Models
 ipcMain.handle('get-models', () => store.get('models'));
-ipcMain.handle('save-model', (_event, name, modelConfig) => {
-  const models = store.get('models');
-  models[name] = modelConfig;
-  store.set('models', models);
-  return models;
-});
-ipcMain.handle('delete-model', (_event, name) => {
-  const models = store.get('models');
-  delete models[name];
-  store.set('models', models);
-  return models;
-});
 
 // History
 ipcMain.handle('get-history', () => historyStore.get('entries'));
 ipcMain.handle('add-history', (_event, entry) => {
-  const entries = historyStore.get('entries');
-  entries.push(entry);
-  // Keep last 50
-  if (entries.length > 50) entries.splice(0, entries.length - 50);
-  historyStore.set('entries', entries);
-  return true;
+  try {
+    const validated = validateHistoryEntry(entry);
+    const entries = historyStore.get('entries');
+    entries.push(validated);
+    if (entries.length > 50) entries.splice(0, entries.length - 50);
+    historyStore.set('entries', entries);
+    return true;
+  } catch (err) {
+    rejectIpc('add-history', err);
+    return false;
+  }
 });
 ipcMain.handle('clear-history', () => {
   historyStore.set('entries', []);
@@ -279,25 +329,37 @@ ipcMain.handle('clear-history', () => {
 });
 
 ipcMain.handle('toggle-history-favorite', (_event, timestamp) => {
-  const entries = historyStore.get('entries');
-  const entry = entries.find(e => e.timestamp === timestamp);
-  if (entry) {
-    entry.favorite = !entry.favorite;
-    historyStore.set('entries', entries);
-    return entry.favorite;
+  try {
+    const safeTimestamp = validateHistoryTagsUpdate(timestamp, []).timestamp;
+    const entries = historyStore.get('entries');
+    const entry = entries.find(e => e.timestamp === safeTimestamp);
+    if (entry) {
+      entry.favorite = !entry.favorite;
+      historyStore.set('entries', entries);
+      return entry.favorite;
+    }
+    return false;
+  } catch (err) {
+    rejectIpc('toggle-history-favorite', err);
+    return false;
   }
-  return false;
 });
 
 ipcMain.handle('update-history-tags', (_event, timestamp, tags) => {
-  const entries = historyStore.get('entries');
-  const entry = entries.find(e => e.timestamp === timestamp);
-  if (entry) {
-    entry.tags = tags;
-    historyStore.set('entries', entries);
-    return true;
+  try {
+    const validated = validateHistoryTagsUpdate(timestamp, tags);
+    const entries = historyStore.get('entries');
+    const entry = entries.find(e => e.timestamp === validated.timestamp);
+    if (entry) {
+      entry.tags = validated.tags;
+      historyStore.set('entries', entries);
+      return true;
+    }
+    return false;
+  } catch (err) {
+    rejectIpc('update-history-tags', err);
+    return false;
   }
-  return false;
 });
 
 ipcMain.handle('get-all-tags', () => {
@@ -316,6 +378,7 @@ ipcMain.handle('select-save-path', async () => {
     title: 'Select Default Save Folder',
   });
   if (!result.canceled && result.filePaths.length > 0) {
+    store.set('defaultSavePath', result.filePaths[0]);
     return result.filePaths[0];
   }
   return null;
@@ -330,7 +393,7 @@ ipcMain.handle('save-image-dialog', async (_event, defaultName) => {
     fs.mkdirSync(datePath, { recursive: true });
   }
   const result = await dialog.showSaveDialog(mainWindow, {
-    defaultPath: path.join(datePath, defaultName || 'picta-output.png'),
+    defaultPath: path.join(datePath, sanitizeDefaultFileName(defaultName)),
     filters: [
       { name: 'PNG', extensions: ['png'] },
       { name: 'JPEG', extensions: ['jpg', 'jpeg'] },
@@ -344,11 +407,18 @@ ipcMain.handle('save-image-dialog', async (_event, defaultName) => {
 });
 
 ipcMain.handle('save-image-file', async (_event, token, base64Data) => {
-  const filePath = approvedSavePaths.get(token);
-  if (!filePath) return false;
-  approvedSavePaths.delete(token);
+  let validated;
   try {
-    const buffer = Buffer.from(base64Data, 'base64');
+    validated = validateSaveImageRequest(token, base64Data);
+  } catch (err) {
+    rejectIpc('save-image-file', err);
+    return false;
+  }
+  const filePath = approvedSavePaths.get(validated.token);
+  if (!filePath) return false;
+  approvedSavePaths.delete(validated.token);
+  try {
+    const buffer = Buffer.from(validated.base64Data, 'base64');
     fs.writeFileSync(filePath, buffer);
     return true;
   } catch (e) {
@@ -359,39 +429,43 @@ ipcMain.handle('save-image-file', async (_event, token, base64Data) => {
 // Auto-save image
 ipcMain.handle('auto-save-image', async (_event, { base64, mimeType, metadata, sourceImages }) => {
   try {
+    const validated = validateAutoSavePayload({ base64, mimeType, metadata, sourceImages });
     const savePath = store.get('defaultSavePath', app.getPath('pictures'));
     const today = new Date().toISOString().slice(0, 10);
 
     let folder = path.join(savePath, today);
-    if (store.get('organizeByTag') && metadata.tags && metadata.tags.length > 0) {
-      folder = path.join(folder, metadata.tags[0]);
+    if (store.get('organizeByTag') && validated.metadata.tags.length > 0) {
+      const safeTagFolder = toSafePathSegment(validated.metadata.tags[0]);
+      if (safeTagFolder) {
+        folder = path.join(folder, safeTagFolder);
+      }
     }
     if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });
 
     const timestamp = Date.now();
-    const ext = mimeType === 'image/jpeg' ? 'jpg' : 'png';
+    const ext = validated.mimeType === 'image/jpeg' ? 'jpg' : 'png';
     const fileName = `picta-${timestamp}.${ext}`;
     const filePath = path.join(folder, fileName);
 
-    const buffer = Buffer.from(base64, 'base64');
+    const buffer = Buffer.from(validated.base64, 'base64');
     fs.writeFileSync(filePath, buffer);
 
     if (store.get('saveMetadata')) {
       const meta = {
-        prompt: metadata.prompt,
-        modelAlias: metadata.modelAlias,
-        aspectRatio: metadata.aspectRatio,
-        resolution: metadata.resolution,
-        timestamp: metadata.timestamp,
-        tags: metadata.tags || [],
+        prompt: validated.metadata.prompt,
+        modelAlias: validated.metadata.modelAlias,
+        aspectRatio: validated.metadata.aspectRatio,
+        resolution: validated.metadata.resolution,
+        timestamp: validated.metadata.timestamp,
+        tags: validated.metadata.tags,
       };
 
-      if (store.get('saveSourceImages') && sourceImages && sourceImages.length > 0) {
+      if (store.get('saveSourceImages') && validated.sourceImages.length > 0) {
         meta.sourceImages = [];
-        for (let i = 0; i < sourceImages.length; i++) {
+        for (let i = 0; i < validated.sourceImages.length; i++) {
           const srcName = `picta-${timestamp}-src-${i}.png`;
           const srcPath = path.join(folder, srcName);
-          const srcBuffer = Buffer.from(sourceImages[i].base64, 'base64');
+          const srcBuffer = Buffer.from(validated.sourceImages[i].base64, 'base64');
           fs.writeFileSync(srcPath, srcBuffer);
           meta.sourceImages.push(srcName);
         }
@@ -412,11 +486,12 @@ ipcMain.handle('auto-save-image', async (_event, { base64, mimeType, metadata, s
 // Clipboard
 ipcMain.handle('copy-image-to-clipboard', (_event, base64Data) => {
   try {
-    const buffer = Buffer.from(base64Data, 'base64');
+    const buffer = Buffer.from(validateSaveImageRequest(crypto.randomUUID(), base64Data).base64Data, 'base64');
     const img = nativeImage.createFromBuffer(buffer);
     clipboard.writeImage(img);
     return true;
-  } catch {
+  } catch (err) {
+    rejectIpc('copy-image-to-clipboard', err);
     return false;
   }
 });
@@ -445,56 +520,58 @@ nativeTheme.on('updated', () => {
 // ── Gemini Generation ──
 ipcMain.handle('generate-image', async (_event, { prompt, aspectRatio, imageSize, modelAlias }) => {
   try {
+    const validated = validateGenerateRequest({ prompt, aspectRatio, imageSize, modelAlias });
     const apiKey = getApiKey();
     if (!apiKey) return { image: null, text: 'API key not set' };
     const genAI = new GoogleGenerativeAI(apiKey);
     const models = store.get('models', MODEL_ALIASES);
-    const { model: modelId } = resolveModel(modelAlias, models);
+    const { model: modelId } = resolveModel(validated.modelAlias, models);
     const model = genAI.getGenerativeModel({
       model: modelId,
       generationConfig: {
         responseModalities: ['image', 'text'],
         imageConfig: {
-          imageSize: imageSize,
-          aspectRatio: ASPECT_RATIOS[aspectRatio] || '16:9',
+          imageSize: validated.imageSize,
+          aspectRatio: ASPECT_RATIOS[validated.aspectRatio] || '16:9',
         },
       },
     });
-    const result = await model.generateContent(`Generate an image: ${prompt}`);
+    const result = await model.generateContent(`Generate an image: ${validated.prompt}`);
     return extractImage(result.response);
   } catch (e) {
     if (logger) logger.error('generate-image failed', { message: e.message, stack: e.stack });
-    throw e;
+    return { image: null, text: e.message || 'Invalid request' };
   }
 });
 
 ipcMain.handle('edit-image', async (_event, { images, prompt, aspectRatio, imageSize, modelAlias }) => {
   try {
+    const validated = validateEditRequest({ images, prompt, aspectRatio, imageSize, modelAlias });
     const apiKey = getApiKey();
     if (!apiKey) return { image: null, text: 'API key not set' };
     const genAI = new GoogleGenerativeAI(apiKey);
     const models = store.get('models', MODEL_ALIASES);
-    const { model: modelId } = resolveModel(modelAlias, models);
+    const { model: modelId } = resolveModel(validated.modelAlias, models);
     const model = genAI.getGenerativeModel({
       model: modelId,
       generationConfig: {
         responseModalities: ['image', 'text'],
         imageConfig: {
-          imageSize: imageSize,
-          aspectRatio: ASPECT_RATIOS[aspectRatio] || '16:9',
+          imageSize: validated.imageSize,
+          aspectRatio: ASPECT_RATIOS[validated.aspectRatio] || '16:9',
         },
       },
     });
     const parts = [];
-    for (const img of images) {
+    for (const img of validated.images) {
       parts.push({ inlineData: { mimeType: img.mimeType || 'image/png', data: img.base64 } });
     }
-    parts.push({ text: `Edit this image: ${prompt}` });
+    parts.push({ text: `Edit this image: ${validated.prompt}` });
     const result = await model.generateContent(parts);
     return extractImage(result.response);
   } catch (e) {
     if (logger) logger.error('edit-image failed', { message: e.message, stack: e.stack });
-    throw e;
+    return { image: null, text: e.message || 'Invalid request' };
   }
 });
 
@@ -534,17 +611,19 @@ ipcMain.handle('check-online', () => {
 // ── Image Resize ──
 ipcMain.handle('resize-image', (_event, base64, mimeType, maxLongEdge) => {
   try {
-    const buffer = Buffer.from(base64, 'base64');
+    const validated = validateResizeRequest(base64, mimeType, maxLongEdge);
+    const buffer = Buffer.from(validated.base64, 'base64');
     const img = nativeImage.createFromBuffer(buffer);
     const { width, height } = img.getSize();
-    const { newW, newH, needsResize } = computeResizeDimensions(width, height, maxLongEdge);
+    const { newW, newH, needsResize } = computeResizeDimensions(width, height, validated.maxLongEdge);
     if (!needsResize) {
-      return { base64, mimeType, resized: false };
+      return { base64: validated.base64, mimeType: validated.mimeType, resized: false };
     }
     const resized = img.resize({ width: newW, height: newH, quality: 'best' });
-    const outBuffer = mimeType === 'image/jpeg' ? resized.toJPEG(90) : resized.toPNG();
-    return { base64: outBuffer.toString('base64'), mimeType, resized: true };
-  } catch {
+    const outBuffer = validated.mimeType === 'image/jpeg' ? resized.toJPEG(90) : resized.toPNG();
+    return { base64: outBuffer.toString('base64'), mimeType: validated.mimeType, resized: true };
+  } catch (err) {
+    rejectIpc('resize-image', err);
     return { base64, mimeType, resized: false };
   }
 });

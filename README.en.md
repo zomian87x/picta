@@ -61,7 +61,16 @@ npm run build:all
 ```
 
 For public macOS release signing and notarization, see [docs/macos-signing-notarization.md](docs/macos-signing-notarization.md).
-The GitHub Actions workflow for automated macOS releases is [`.github/workflows/release-macos.yml`](/Users/ibuki/Projects/active/picta/.github/workflows/release-macos.yml).
+The GitHub Actions workflow for automated macOS releases is [`.github/workflows/release-macos.yml`](.github/workflows/release-macos.yml).
+
+## Installation (macOS)
+
+The app is currently distributed without code signing. Before launching for the first time, run the following in Terminal:
+
+```bash
+sudo xattr -cr /Applications/Picta.app
+sudo codesign --force --deep --sign - /Applications/Picta.app
+```
 
 ## Requirements
 

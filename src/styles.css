@@ -207,7 +207,7 @@ textarea, input[type="text"], input[type="password"], select {
 textarea:focus, input[type="text"]:focus, input[type="password"]:focus, select:focus {
   border-color: var(--accent);
 }
-textarea { resize: vertical; min-height: 160px; }
+textarea { resize: vertical; min-height: 200px; }
 
 select {
   appearance: none;
@@ -784,12 +784,15 @@ select {
   flex: 1;
   max-width: 680px;
   min-width: 0;
+  overflow-y: auto;
 }
 .settings-aside {
   width: 280px;
   flex-shrink: 0;
   position: sticky;
   top: 0;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
   align-self: flex-start;
 }
 
@@ -864,6 +867,7 @@ select {
   flex-direction: column;
   gap: 8px;
   margin-top: 12px;
+  padding-bottom: 32px;
 }
 
 .preset-item {

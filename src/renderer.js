@@ -92,7 +92,6 @@ async function init() {
   setupCanvas();
   setupSettings();
   setupPresetModal();
-  setupModelModal();
   await loadModels();
   setupKeyboardShortcuts();
   setupMenuEvents();
@@ -1140,7 +1139,6 @@ function setupSettings() {
     const path = await window.api.selectSavePath();
     if (path) {
       config.defaultSavePath = path;
-      await window.api.setConfig('defaultSavePath', path);
       $('#save-path-display').textContent = path;
     }
   });
@@ -1295,74 +1293,9 @@ function renderModelList() {
         <span class="preset-name">${escapeHtml(name)}</span>
         <span style="font-size:11px;color:var(--text-tertiary);display:block;margin-top:2px">${escapeHtml(mc.model)}${mc.thinkingLevel ? ` (${escapeHtml(mc.thinkingLevel)})` : ''}</span>
       </div>
-      <div style="display:flex;gap:4px">
-        <button class="btn-icon" data-model-edit="${escapeAttr(name)}" title="Edit">✏️</button>
-        <button class="btn-icon" data-model-delete="${escapeAttr(name)}" title="Delete">🗑️</button>
-      </div>
     `;
     list.appendChild(item);
   }
-
-  list.querySelectorAll('[data-model-edit]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const name = btn.dataset.modelEdit;
-      const mc = models[name];
-      openModelModal(name, mc);
-    });
-  });
-  list.querySelectorAll('[data-model-delete]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const name = btn.dataset.modelDelete;
-      config.models = await window.api.deleteModel(name);
-      populateModelSelect();
-      if (config.modelAlias === name) {
-        const first = Object.keys(config.models)[0];
-        if (first) {
-          config.modelAlias = first;
-          await window.api.setConfig('modelAlias', first);
-          $('#setting-model').value = first;
-        }
-      }
-      renderModelList();
-      showToast(t('toast.model_deleted'), 'success');
-    });
-  });
-}
-
-function setupModelModal() {
-  $('#add-model-btn').addEventListener('click', () => openModelModal('', null));
-  $('#model-modal-cancel').addEventListener('click', closeModelModal);
-  $('#model-modal').addEventListener('click', (e) => {
-    if (e.target === $('#model-modal')) closeModelModal();
-  });
-
-  $('#model-modal-save').addEventListener('click', async () => {
-    const alias = $('#model-alias-input').value.trim();
-    const modelId = $('#model-id-input').value.trim();
-    if (!alias || !modelId) {
-      showToast(t('toast.model_name_required'), 'error');
-      return;
-    }
-    const thinkingLevel = $('#model-thinking-input').value || null;
-    config.models = await window.api.saveModel(alias, { model: modelId, thinkingLevel });
-    populateModelSelect();
-    $('#setting-model').value = config.modelAlias;
-    renderModelList();
-    closeModelModal();
-    showToast(t('toast.model_saved'), 'success');
-  });
-}
-
-function openModelModal(name, mc) {
-  $('#model-modal-title').textContent = name ? t('model.edit_title') : t('model.new_title');
-  $('#model-alias-input').value = name;
-  $('#model-id-input').value = mc?.model || '';
-  $('#model-thinking-input').value = mc?.thinkingLevel || '';
-  $('#model-modal').classList.remove('hidden');
-}
-
-function closeModelModal() {
-  $('#model-modal').classList.add('hidden');
 }
 
 // ── Keyboard Shortcuts ──
@@ -1570,6 +1503,7 @@ function buildShortcutList() {
   const shortcuts = [
     { label: t('settings.shortcut_generate'), keys: [mod, 'Enter'] },
     { label: t('settings.shortcut_save'), keys: [mod, 'S'] },
+    { label: t('settings.shortcut_copy'), keys: [mod, 'C'] },
     { label: t('settings.shortcut_paste'), keys: [mod, 'V'] },
     { label: t('settings.shortcut_mention'), keys: ['@'] },
     { label: t('nav.settings'), keys: [mod, ','] },
@@ -1607,6 +1541,7 @@ function buildHelpContent() {
   const shortcutRows = [
     [t('settings.shortcut_generate'), [mod, 'Enter']],
     [t('settings.shortcut_save'), [mod, 'S']],
+    [t('settings.shortcut_copy'), [mod, 'C']],
     [t('settings.shortcut_paste'), [mod, 'V']],
     [t('settings.shortcut_mention'), ['@']],
     [t('nav.settings'), [mod, ',']],
