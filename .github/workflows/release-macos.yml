@@ -66,5 +66,18 @@ jobs:
           name: macos-release
           path: |
             dist/*.dmg
+            dist/*.dmg.blockmap
             dist/*.zip
+            dist/*.zip.blockmap
+            dist/latest-mac.yml
+
+      - name: Upload assets to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.dmg
+            dist/*.dmg.blockmap
+            dist/*.zip
+            dist/*.zip.blockmap
             dist/latest-mac.yml

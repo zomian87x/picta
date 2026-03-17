@@ -54,6 +54,8 @@ The workflow file is:
 
 - `.github/workflows/release-macos.yml`
 
+When triggered by a GitHub Release publish event, the workflow also attaches `.dmg`, `.zip`, blockmap, and `latest-mac.yml` files to that release.
+
 ## Output verification
 
 After a successful signed build, verify the app bundle and notarization ticket locally:
