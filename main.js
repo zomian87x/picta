@@ -31,6 +31,10 @@ function initStores() {
       notificationSoundType: 'default',
       defaultSavePath: app.getPath('pictures'),
       maxInputLongEdge: 2048,
+      autoSaveGenerated: false,
+      saveMetadata: false,
+      saveSourceImages: false,
+      organizeByTag: false,
       models: {
         'nano banana': { model: 'gemini-3-pro-image-preview', thinkingLevel: null },
         'nanobanana 2': { model: 'gemini-3.1-flash-image-preview', thinkingLevel: 'MINIMAL' },
@@ -208,6 +212,10 @@ ipcMain.handle('get-config', () => {
     maxInputLongEdge: store.get('maxInputLongEdge'),
     promptPresets: store.get('promptPresets'),
     models: store.get('models'),
+    autoSaveGenerated: store.get('autoSaveGenerated'),
+    saveMetadata: store.get('saveMetadata'),
+    saveSourceImages: store.get('saveSourceImages'),
+    organizeByTag: store.get('organizeByTag'),
     hasApiKey: !!getApiKey(),
   };
 });
@@ -345,6 +353,59 @@ ipcMain.handle('save-image-file', async (_event, token, base64Data) => {
     return true;
   } catch (e) {
     return false;
+  }
+});
+
+// Auto-save image
+ipcMain.handle('auto-save-image', async (_event, { base64, mimeType, metadata, sourceImages }) => {
+  try {
+    const savePath = store.get('defaultSavePath', app.getPath('pictures'));
+    const today = new Date().toISOString().slice(0, 10);
+
+    let folder = path.join(savePath, today);
+    if (store.get('organizeByTag') && metadata.tags && metadata.tags.length > 0) {
+      folder = path.join(folder, metadata.tags[0]);
+    }
+    if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });
+
+    const timestamp = Date.now();
+    const ext = mimeType === 'image/jpeg' ? 'jpg' : 'png';
+    const fileName = `picta-${timestamp}.${ext}`;
+    const filePath = path.join(folder, fileName);
+
+    const buffer = Buffer.from(base64, 'base64');
+    fs.writeFileSync(filePath, buffer);
+
+    if (store.get('saveMetadata')) {
+      const meta = {
+        prompt: metadata.prompt,
+        modelAlias: metadata.modelAlias,
+        aspectRatio: metadata.aspectRatio,
+        resolution: metadata.resolution,
+        timestamp: metadata.timestamp,
+        tags: metadata.tags || [],
+      };
+
+      if (store.get('saveSourceImages') && sourceImages && sourceImages.length > 0) {
+        meta.sourceImages = [];
+        for (let i = 0; i < sourceImages.length; i++) {
+          const srcName = `picta-${timestamp}-src-${i}.png`;
+          const srcPath = path.join(folder, srcName);
+          const srcBuffer = Buffer.from(sourceImages[i].base64, 'base64');
+          fs.writeFileSync(srcPath, srcBuffer);
+          meta.sourceImages.push(srcName);
+        }
+      }
+
+      const metaPath = filePath + '.json';
+      fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+    }
+
+    if (logger) logger.info('Auto-saved image', { filePath });
+    return { filePath };
+  } catch (e) {
+    if (logger) logger.error('auto-save-image failed', { message: e.message, stack: e.stack });
+    return { error: e.message };
   }
 });
 

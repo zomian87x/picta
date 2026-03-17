@@ -55,6 +55,18 @@ async function init() {
   if (config.notificationSound) {
     $('#setting-notification-sound').classList.add('active');
   }
+  if (config.autoSaveGenerated) {
+    $('#setting-auto-save').classList.add('active');
+  }
+  if (config.saveMetadata) {
+    $('#setting-save-metadata').classList.add('active');
+  }
+  if (config.saveSourceImages) {
+    $('#setting-save-source').classList.add('active');
+  }
+  if (config.organizeByTag) {
+    $('#setting-organize-tag').classList.add('active');
+  }
 
   // Update shortcut hints based on OS
   const modKey = platformIsMac ? 'Cmd' : 'Ctrl';
@@ -473,6 +485,30 @@ async function handleGenerate() {
         thumbnailFull: generatedImages[0].base64,
       };
       await window.api.addHistory(entry);
+
+      // Auto-save if enabled
+      if (config.autoSaveGenerated) {
+        for (const img of generatedImages) {
+          const sourceImgs = config.saveSourceImages ? inputImages : [];
+          const result = await window.api.autoSaveImage({
+            base64: img.base64,
+            mimeType: img.mimeType,
+            metadata: {
+              prompt: rawPrompt,
+              modelAlias,
+              aspectRatio,
+              resolution,
+              timestamp: entry.timestamp,
+              tags: [],
+            },
+            sourceImages: sourceImgs,
+          });
+          if (result.filePath) {
+            showToast(t('toast.auto_saved', result.filePath), 'success');
+          }
+        }
+      }
+
       playNotificationSound();
     }
   } catch (e) {
@@ -1129,6 +1165,22 @@ function setupSettings() {
     $('#api-key-status').textContent = t('settings.api_key_status_set');
     showToast(t('toast.api_key_saved'), 'success');
   });
+
+  // Auto-save toggles
+  const autoSaveToggles = [
+    { id: 'setting-auto-save', key: 'autoSaveGenerated' },
+    { id: 'setting-save-metadata', key: 'saveMetadata' },
+    { id: 'setting-save-source', key: 'saveSourceImages' },
+    { id: 'setting-organize-tag', key: 'organizeByTag' },
+  ];
+  for (const { id, key } of autoSaveToggles) {
+    $(`#${id}`).addEventListener('click', async (e) => {
+      const toggle = e.currentTarget;
+      toggle.classList.toggle('active');
+      config[key] = toggle.classList.contains('active');
+      await window.api.setConfig(key, config[key]);
+    });
+  }
 }
 
 // ── Presets ──

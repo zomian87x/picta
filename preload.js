@@ -31,6 +31,9 @@ contextBridge.exposeInMainWorld('api', {
   saveImageDialog: (defaultName) => ipcRenderer.invoke('save-image-dialog', defaultName),
   saveImageFile: (token, base64Data) => ipcRenderer.invoke('save-image-file', token, base64Data),
 
+  // Auto-save
+  autoSaveImage: (params) => ipcRenderer.invoke('auto-save-image', params),
+
   // Clipboard
   copyImageToClipboard: (base64Data) => ipcRenderer.invoke('copy-image-to-clipboard', base64Data),
   getClipboardImage: () => ipcRenderer.invoke('get-clipboard-image'),
