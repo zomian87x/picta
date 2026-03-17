@@ -13,6 +13,11 @@ contextBridge.exposeInMainWorld('api', {
   savePreset: (name, prompt) => ipcRenderer.invoke('save-preset', name, prompt),
   deletePreset: (name) => ipcRenderer.invoke('delete-preset', name),
 
+  // Models
+  getModels: () => ipcRenderer.invoke('get-models'),
+  saveModel: (name, modelConfig) => ipcRenderer.invoke('save-model', name, modelConfig),
+  deleteModel: (name) => ipcRenderer.invoke('delete-model', name),
+
   // History
   getHistory: () => ipcRenderer.invoke('get-history'),
   addHistory: (entry) => ipcRenderer.invoke('add-history', entry),

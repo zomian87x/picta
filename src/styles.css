@@ -818,6 +818,14 @@ select {
   flex: 1;
 }
 
+/* ── Model list (reuses preset-item pattern) ── */
+.model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 /* ── Modal / Overlay ── */
 .modal-overlay {
   position: fixed;

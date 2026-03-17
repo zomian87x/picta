@@ -211,11 +211,7 @@
                 <span data-i18n="settings.model_desc"></span>
               </div>
               <div class="setting-control">
-                <select id="setting-model">
-                  <option value="nano banana">nano banana</option>
-                  <option value="nanobanana 2">nanobanana 2</option>
-                  <option value="nano banana pro">nano banana pro</option>
-                </select>
+                <select id="setting-model"></select>
               </div>
             </div>
             <div class="setting-row">
@@ -245,6 +241,14 @@
                 </select>
               </div>
             </div>
+          </div>
+
+          <div class="settings-section">
+            <h2 data-i18n="settings.models_manage"></h2>
+            <div style="display:flex; gap:8px; margin-bottom:12px;">
+              <button class="btn btn-primary" id="add-model-btn" data-i18n="settings.add_model"></button>
+            </div>
+            <div class="model-list" id="model-list"></div>
           </div>
 
           <div class="settings-section">
@@ -329,6 +333,34 @@
       <div class="modal-actions">
         <button class="btn btn-secondary" id="preset-modal-cancel" data-i18n="preset.cancel"></button>
         <button class="btn btn-primary" id="preset-modal-save" data-i18n="preset.save"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Model Modal -->
+  <div class="modal-overlay hidden" id="model-modal">
+    <div class="modal">
+      <h2 id="model-modal-title" data-i18n="model.new_title"></h2>
+      <div class="form-group" style="margin-bottom:12px">
+        <label data-i18n="model.alias"></label>
+        <input type="text" id="model-alias-input" data-i18n-placeholder="model.alias_placeholder">
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label data-i18n="model.model_id"></label>
+        <input type="text" id="model-id-input" data-i18n-placeholder="model.model_id_placeholder">
+      </div>
+      <div class="form-group">
+        <label data-i18n="model.thinking_level"></label>
+        <select id="model-thinking-input">
+          <option value="">None</option>
+          <option value="MINIMAL">Minimal</option>
+          <option value="LOW">Low</option>
+          <option value="MEDIUM">Medium</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="model-modal-cancel" data-i18n="model.cancel"></button>
+        <button class="btn btn-primary" id="model-modal-save" data-i18n="model.save"></button>
       </div>
     </div>
   </div>

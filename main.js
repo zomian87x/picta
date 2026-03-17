@@ -31,6 +31,11 @@ function initStores() {
       notificationSoundType: 'default',
       defaultSavePath: app.getPath('pictures'),
       maxInputLongEdge: 2048,
+      models: {
+        'nano banana': { model: 'gemini-3-pro-image-preview', thinkingLevel: null },
+        'nanobanana 2': { model: 'gemini-3.1-flash-image-preview', thinkingLevel: 'MINIMAL' },
+        'nano banana pro': { model: 'gemini-3-pro-image-preview', thinkingLevel: null },
+      },
       promptPresets: {
         '線画（トーンなし）': `画像編集をしてください。与えられた画像をもとに、次のような画像を作ってください。\n\n白い紙に純粋な黒インクの線のみで描かれた漫画の背景イラスト。\n線は綺麗で鮮明。\nパースは元画像から変更しない。\n使用するのは黒インクの線のみ。\nトーン・スクリーントーン・ドットパターン・グレー塗り・グラデーションは使用禁止。\n奥行きを示すために最低限のハッチングのみ使用可。\n背景のみでキャラクターは含まない。\n画像内の文字・テキスト・看板の文字などは全て消去する。\nシャープで印刷可能な品質。`,
         '線画＋トーン': `画像編集をしてください。与えられた画像をもとに、次のような画像を作ってください。\n\n白い紙に黒インクの線画とスクリーントーンによる陰影で描かれた漫画の背景イラスト。\n綺麗で鮮明な輪郭線。\nパースは元画像から変更しない。\n影と奥行きにはスクリーントーンのドットパターンとグラデーショントーンを使用。\nカラーなし、絵画的な陰影なし、フォトリアルな描写なし。\n背景のみでキャラクターは含まない。\n画像内の文字・テキスト・看板の文字などは全て消去する。\nハイコントラストで印刷可能な品質。`,
@@ -202,6 +207,7 @@ ipcMain.handle('get-config', () => {
     defaultSavePath: store.get('defaultSavePath'),
     maxInputLongEdge: store.get('maxInputLongEdge'),
     promptPresets: store.get('promptPresets'),
+    models: store.get('models'),
     hasApiKey: !!getApiKey(),
   };
 });
@@ -232,6 +238,21 @@ ipcMain.handle('delete-preset', (_event, name) => {
   delete presets[name];
   store.set('promptPresets', presets);
   return presets;
+});
+
+// Models
+ipcMain.handle('get-models', () => store.get('models'));
+ipcMain.handle('save-model', (_event, name, modelConfig) => {
+  const models = store.get('models');
+  models[name] = modelConfig;
+  store.set('models', models);
+  return models;
+});
+ipcMain.handle('delete-model', (_event, name) => {
+  const models = store.get('models');
+  delete models[name];
+  store.set('models', models);
+  return models;
 });
 
 // History

@@ -42,6 +42,7 @@ async function init() {
   // Populate UI from config
   $('#setting-theme').value = config.theme;
   $('#setting-language').value = config.language || 'ja';
+  populateModelSelect();
   $('#setting-model').value = config.modelAlias;
   $('#setting-resolution').value = config.resolution || '2K';
   $('#setting-slot-count').value = config.imageSlotCount;
@@ -79,6 +80,8 @@ async function init() {
   setupCanvas();
   setupSettings();
   setupPresetModal();
+  setupModelModal();
+  await loadModels();
   setupKeyboardShortcuts();
   setupMenuEvents();
   setupDragDrop();
@@ -1119,6 +1122,109 @@ function openPresetModal(name, prompt) {
 
 function closePresetModal() {
   $('#preset-modal').classList.add('hidden');
+}
+
+// ── Models ──
+function populateModelSelect() {
+  const select = $('#setting-model');
+  const models = config.models || {};
+  select.innerHTML = '';
+  for (const name of Object.keys(models)) {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    select.appendChild(opt);
+  }
+}
+
+async function loadModels() {
+  const models = await window.api.getModels();
+  config.models = models;
+  populateModelSelect();
+  $('#setting-model').value = config.modelAlias;
+  renderModelList();
+}
+
+function renderModelList() {
+  const list = $('#model-list');
+  const models = config.models || {};
+  list.innerHTML = '';
+  for (const [name, mc] of Object.entries(models)) {
+    const item = document.createElement('div');
+    item.className = 'preset-item';
+    item.innerHTML = `
+      <div style="flex:1;min-width:0">
+        <span class="preset-name">${escapeHtml(name)}</span>
+        <span style="font-size:11px;color:var(--text-tertiary);display:block;margin-top:2px">${escapeHtml(mc.model)}${mc.thinkingLevel ? ` (${escapeHtml(mc.thinkingLevel)})` : ''}</span>
+      </div>
+      <div style="display:flex;gap:4px">
+        <button class="btn-icon" data-model-edit="${escapeAttr(name)}" title="Edit">✏️</button>
+        <button class="btn-icon" data-model-delete="${escapeAttr(name)}" title="Delete">🗑️</button>
+      </div>
+    `;
+    list.appendChild(item);
+  }
+
+  list.querySelectorAll('[data-model-edit]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const name = btn.dataset.modelEdit;
+      const mc = models[name];
+      openModelModal(name, mc);
+    });
+  });
+  list.querySelectorAll('[data-model-delete]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const name = btn.dataset.modelDelete;
+      config.models = await window.api.deleteModel(name);
+      populateModelSelect();
+      if (config.modelAlias === name) {
+        const first = Object.keys(config.models)[0];
+        if (first) {
+          config.modelAlias = first;
+          await window.api.setConfig('modelAlias', first);
+          $('#setting-model').value = first;
+        }
+      }
+      renderModelList();
+      showToast(t('toast.model_deleted'), 'success');
+    });
+  });
+}
+
+function setupModelModal() {
+  $('#add-model-btn').addEventListener('click', () => openModelModal('', null));
+  $('#model-modal-cancel').addEventListener('click', closeModelModal);
+  $('#model-modal').addEventListener('click', (e) => {
+    if (e.target === $('#model-modal')) closeModelModal();
+  });
+
+  $('#model-modal-save').addEventListener('click', async () => {
+    const alias = $('#model-alias-input').value.trim();
+    const modelId = $('#model-id-input').value.trim();
+    if (!alias || !modelId) {
+      showToast(t('toast.model_name_required'), 'error');
+      return;
+    }
+    const thinkingLevel = $('#model-thinking-input').value || null;
+    config.models = await window.api.saveModel(alias, { model: modelId, thinkingLevel });
+    populateModelSelect();
+    $('#setting-model').value = config.modelAlias;
+    renderModelList();
+    closeModelModal();
+    showToast(t('toast.model_saved'), 'success');
+  });
+}
+
+function openModelModal(name, mc) {
+  $('#model-modal-title').textContent = name ? t('model.edit_title') : t('model.new_title');
+  $('#model-alias-input').value = name;
+  $('#model-id-input').value = mc?.model || '';
+  $('#model-thinking-input').value = mc?.thinkingLevel || '';
+  $('#model-modal').classList.remove('hidden');
+}
+
+function closeModelModal() {
+  $('#model-modal').classList.add('hidden');
 }
 
 // ── Keyboard Shortcuts ──
