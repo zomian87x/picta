@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- square icon background -->
+  <rect width="256" height="256" rx="46" fill="#E6F1FB"/>
+
+  <!-- landscape canvas -->
+  <rect x="20" y="22" width="216" height="158" rx="10" fill="white" stroke="#85B7EB" stroke-width="2.5"/>
+
+  <!-- clip circles to canvas -->
+  <clipPath id="canvas-clip">
+    <rect x="20" y="22" width="216" height="158" rx="10"/>
+  </clipPath>
+  <g clip-path="url(#canvas-clip)">
+    <!-- top row: 3 circles with gaps -->
+    <circle cx="62"  cy="72"  r="38" fill="#E24B4A" opacity="0.9"/>
+    <circle cx="128" cy="60"  r="38" fill="#EF9F27" opacity="0.9"/>
+    <circle cx="194" cy="72"  r="38" fill="#1D9E75" opacity="0.85"/>
+    <!-- bottom row: 2 circles centered -->
+    <circle cx="95"  cy="138" r="36" fill="#7F77DD" opacity="0.85"/>
+    <circle cx="161" cy="138" r="36" fill="#F9CB42"  opacity="0.9"/>
+  </g>
+
+  <!-- easel legs -->
+  <line x1="56"  y1="180" x2="34"  y2="228" stroke="#85B7EB" stroke-width="3"   stroke-linecap="round"/>
+  <line x1="200" y1="180" x2="222" y2="228" stroke="#85B7EB" stroke-width="3"   stroke-linecap="round"/>
+  <line x1="128" y1="180" x2="128" y2="230" stroke="#85B7EB" stroke-width="3"   stroke-linecap="round"/>
+  <line x1="38"  y1="206" x2="218" y2="206" stroke="#85B7EB" stroke-width="2"   stroke-linecap="round"/>
+</svg>

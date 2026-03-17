@@ -1,0 +1,70 @@
+name: release-macos
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  build-macos:
+    runs-on: macos-14
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate signing secrets
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -eu
+          [ -n "$CSC_LINK" ] || { echo "Missing CSC_LINK"; exit 1; }
+          [ -n "$CSC_KEY_PASSWORD" ] || { echo "Missing CSC_KEY_PASSWORD"; exit 1; }
+          [ -n "$APPLE_API_KEY_CONTENT" ] || { echo "Missing APPLE_API_KEY"; exit 1; }
+          [ -n "$APPLE_API_KEY_ID" ] || { echo "Missing APPLE_API_KEY_ID"; exit 1; }
+          [ -n "$APPLE_API_ISSUER" ] || { echo "Missing APPLE_API_ISSUER"; exit 1; }
+
+      - name: Prepare App Store Connect API key
+        env:
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+        run: |
+          set -eu
+          key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+          printf '%s' "$APPLE_API_KEY_CONTENT" > "$key_path"
+          chmod 600 "$key_path"
+          {
+            echo "APPLE_API_KEY=$key_path"
+            echo "APPLE_API_KEY_ID=$APPLE_API_KEY_ID"
+            echo "APPLE_API_ISSUER=${{ secrets.APPLE_API_ISSUER }}"
+          } >> "$GITHUB_ENV"
+
+      - name: Build signed and notarized macOS artifacts
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: npm run build:mac:release
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-release
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/latest-mac.yml

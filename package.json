@@ -1,0 +1,65 @@
+{
+  "name": "picta",
+  "version": "1.0.0",
+  "description": "Picta - Gemini Image Generation Desktop App",
+  "main": "main.js",
+  "scripts": {
+    "start": "unset ELECTRON_RUN_AS_NODE && electron .",
+    "build": "electron-builder --mac",
+    "build:mac:release": "electron-builder --mac -c.mac.forceCodeSigning=true",
+    "build:win": "electron-builder --win",
+    "build:all": "electron-builder --mac --win",
+    "pack": "electron-builder --dir"
+  },
+  "keywords": [
+    "gemini",
+    "image-generation",
+    "electron"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "electron": "^35.7.5",
+    "electron-builder": "^26.8.1"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "electron-store": "^8.2.0",
+    "electron-updater": "^6.3.9"
+  },
+  "build": {
+    "appId": "com.picta.app",
+    "productName": "Picta",
+    "mac": {
+      "category": "public.app-category.graphics-design",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "notarize": true,
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "assets/icon.icns"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "assets/**/*"
+    ]
+  }
+}

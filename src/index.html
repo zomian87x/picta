@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src https://generativelanguage.googleapis.com">
+  <title>Picta</title>
+  <link rel="icon" type="image/png" href="../assets/icon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Titlebar -->
+    <div class="titlebar">
+      <h1>Picta</h1>
+    </div>
+
+    <!-- Offline banner -->
+    <div class="offline-banner hidden" id="offline-banner">
+      <span data-i18n="offline.banner"></span>
+    </div>
+
+    <div class="main-content">
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <button class="sidebar-btn active" data-panel="generate" title="Generate">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2l.5 4 4 .5-4 .5-.5 4-.5-4-4-.5 4-.5z"/><path d="M18 8l.5 3 3 .5-3 .5-.5 3-.5-3-3-.5 3-.5z"/><path d="M8 14l.5 4 4 .5-4 .5-.5 4-.5-4-4-.5 4-.5z"/></svg>
+        </button>
+        <button class="sidebar-btn" data-panel="canvas" title="Canvas">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+        </button>
+        <button class="sidebar-btn" data-panel="history" title="History">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </button>
+        <div class="sidebar-spacer"></div>
+        <button class="sidebar-btn" data-panel="help" title="Help">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </button>
+        <button class="sidebar-btn" data-panel="settings" title="Settings">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </div>
+
+      <!-- ═══ Generate Panel ═══ -->
+      <div class="panel active" id="panel-generate">
+        <div class="generate-panel">
+          <div class="input-section">
+            <!-- Prompt -->
+            <div class="form-group" style="position:relative">
+              <label data-i18n="generate.prompt"></label>
+              <textarea id="prompt-input" data-i18n-placeholder="generate.prompt_placeholder" rows="8"></textarea>
+              <div class="mention-dropdown hidden" id="mention-dropdown"></div>
+            </div>
+
+            <!-- Preset -->
+            <div class="form-group">
+              <label data-i18n="generate.preset"></label>
+              <select id="preset-select">
+                <option value="" data-i18n="generate.preset_custom"></option>
+              </select>
+            </div>
+
+            <!-- Controls row -->
+            <div class="form-row">
+              <div class="form-group">
+                <label data-i18n="generate.count"></label>
+                <select id="count-select">
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label data-i18n="generate.aspect"></label>
+                <select id="aspect-select">
+                  <option value="1:1">1:1</option>
+                  <option value="2:3" data-i18n-suffix="generate.aspect_portrait">2:3</option>
+                  <option value="3:2" data-i18n-suffix="generate.aspect_landscape">3:2</option>
+                  <option value="4:3" data-i18n-suffix="generate.aspect_landscape">4:3</option>
+                  <option value="3:4" data-i18n-suffix="generate.aspect_portrait">3:4</option>
+                  <option value="16:9" selected data-i18n-suffix="generate.aspect_landscape">16:9</option>
+                  <option value="9:16" data-i18n-suffix="generate.aspect_portrait">9:16</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Generate button -->
+            <button class="btn btn-primary btn-full generate-btn" id="generate-btn">
+            </button>
+
+            <!-- Image Slots -->
+            <div class="form-group">
+              <label data-i18n="generate.input_images"></label>
+              <div class="image-slots" id="image-slots"></div>
+            </div>
+          </div>
+
+          <!-- Output -->
+          <div class="output-section" id="output-section">
+            <div class="empty-state" id="output-empty">
+              <img src="../assets/icon.svg" alt="" class="empty-state-icon">
+              <p data-i18n="generate.empty_text"></p>
+              <p style="font-size: 12px;" id="generate-hint"></p>
+            </div>
+            <div class="gallery hidden" id="output-gallery"></div>
+            <div class="log-area hidden" id="generation-log"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ Canvas Panel ═══ -->
+      <div class="panel" id="panel-canvas">
+        <div class="canvas-panel">
+          <div class="canvas-toolbar">
+            <button class="btn btn-secondary" id="canvas-load-file" data-i18n="canvas.load_file"></button>
+            <input type="file" accept="image/*" class="hidden" id="canvas-file-input">
+            <button class="btn btn-secondary" id="canvas-load-slot" data-i18n="canvas.load_slot"></button>
+            <div class="toolbar-separator"></div>
+            <label style="margin:0" data-i18n="canvas.brush"></label>
+            <input type="range" id="brush-size" min="1" max="50" value="8">
+            <input type="color" id="brush-color" value="#000000">
+            <button class="btn btn-secondary" id="canvas-eraser" data-i18n="canvas.eraser"></button>
+            <button class="btn btn-secondary" id="canvas-undo" data-i18n="canvas.undo"></button>
+            <button class="btn btn-secondary" id="canvas-clear" data-i18n="canvas.clear"></button>
+            <div class="toolbar-separator"></div>
+            <button class="btn btn-secondary" id="canvas-apply-aspect" data-i18n="canvas.apply_aspect"></button>
+            <button class="btn btn-primary" id="canvas-use" data-i18n="canvas.send_to_slot"></button>
+          </div>
+          <!-- Slot picker for canvas -->
+          <div class="slot-picker hidden" id="canvas-slot-picker"></div>
+          <div class="canvas-container">
+            <canvas id="draw-canvas" width="1280" height="720"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ History Panel ═══ -->
+      <div class="panel" id="panel-history">
+        <div class="history-panel">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h2 style="font-size:18px;" data-i18n="history.title"></h2>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <button class="btn btn-secondary" id="history-filter-favorites" data-i18n="history.show_favorites_only"></button>
+              <button class="btn btn-secondary" id="history-clear" data-i18n="history.clear_all"></button>
+            </div>
+          </div>
+          <div class="history-grid" id="history-grid">
+            <div class="empty-state" id="history-empty">
+              <div class="icon" data-i18n="history.empty_icon"></div>
+              <p data-i18n="history.empty_text"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ Settings Panel ═══ -->
+      <div class="panel" id="panel-settings">
+        <div class="settings-panel">
+          <div class="settings-main">
+          <div class="settings-section">
+            <h2 data-i18n="settings.api"></h2>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span data-i18n="settings.api_key"></span>
+                <span id="api-key-status"></span>
+              </div>
+              <div class="setting-control">
+                <input type="password" id="api-key-input" data-i18n-placeholder="settings.api_key_placeholder">
+              </div>
+            </div>
+            <div style="padding-top:8px">
+              <button class="btn btn-primary" id="save-api-key-btn" data-i18n="settings.save_api_key"></button>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h2 data-i18n="settings.appearance"></h2>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span data-i18n="settings.theme"></span>
+                <span data-i18n="settings.theme_desc"></span>
+              </div>
+              <div class="setting-control">
+                <select id="setting-theme">
+                  <option value="system" data-i18n="settings.theme_system"></option>
+                  <option value="light" data-i18n="settings.theme_light"></option>
+                  <option value="dark" data-i18n="settings.theme_dark"></option>
+                </select>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span data-i18n="settings.language"></span>
+                <span data-i18n="settings.language_desc"></span>
+              </div>
+              <div class="setting-control">
+                <select id="setting-language">
+                  <option value="ja">日本語</option>
+                  <option value="en">English</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h2 data-i18n="settings.generation"></h2>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span data-i18n="settings.model"></span>
+                <span data-i18n="settings.model_desc"></span>
+              </div>
+              <div class="setting-control">
+                <select id="setting-model">
+                  <option value="nano banana">nano banana</option>
+                  <option value="nanobanana 2">nanobanana 2</option>
+                  <option value="nano banana pro">nano banana pro</option>
+                </select>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span data-i18n="settings.resolution"></span>
+                <span data-i18n="settings.resolution_desc"></span>
+              </div>
+              <div class="setting-control">
+                <select id="setting-resolution">
+                  <option value="1K">1K</option>
+                  <option value="2K">2K</option>
+                  <option value="4K">4K</option>
+                </select>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span data-i18n="settings.slot_count"></span>
+                <span data-i18n="settings.slot_count_desc"></span>
+              </div>
+              <div class="setting-control">
+                <select id="setting-slot-count">
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5">5</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h2 data-i18n="settings.notifications"></h2>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span data-i18n="settings.notification_sound"></span>
+                <span data-i18n="settings.notification_sound_desc"></span>
+              </div>
+              <div class="setting-control">
+                <button class="toggle" id="setting-notification-sound"></button>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span data-i18n="settings.sound_type"></span>
+                <span data-i18n="settings.sound_type_desc"></span>
+              </div>
+              <div class="setting-control">
+                <select id="setting-sound-type">
+                  <option value="default">Default</option>
+                  <option value="chime">Chime</option>
+                  <option value="bell">Bell</option>
+                  <option value="soft">Soft</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h2 data-i18n="settings.file"></h2>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span data-i18n="settings.save_path"></span>
+                <span id="save-path-display">~/Pictures</span>
+              </div>
+              <div class="setting-control">
+                <button class="btn btn-secondary" id="setting-save-path-btn" data-i18n="settings.browse"></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h2 data-i18n="settings.presets"></h2>
+            <div style="display:flex; gap:8px; margin-bottom:12px;">
+              <button class="btn btn-primary" id="add-preset-btn" data-i18n="settings.new_preset"></button>
+            </div>
+            <div class="preset-list" id="preset-list"></div>
+          </div>
+          </div><!-- /.settings-main -->
+
+          <div class="settings-aside">
+            <div class="settings-section">
+              <h2 data-i18n="settings.shortcuts"></h2>
+              <div class="shortcut-list" id="shortcut-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ Help Panel ═══ -->
+      <div class="panel" id="panel-help">
+        <div class="help-panel">
+          <div class="help-content" id="help-content"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preset Modal -->
+  <div class="modal-overlay hidden" id="preset-modal">
+    <div class="modal">
+      <h2 id="preset-modal-title" data-i18n="preset.new_title"></h2>
+      <div class="form-group" style="margin-bottom:12px">
+        <label data-i18n="preset.name"></label>
+        <input type="text" id="preset-name-input" data-i18n-placeholder="preset.name_placeholder">
+      </div>
+      <div class="form-group">
+        <label data-i18n="preset.prompt"></label>
+        <textarea id="preset-prompt-input" rows="8" data-i18n-placeholder="preset.prompt_placeholder"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="preset-modal-cancel" data-i18n="preset.cancel"></button>
+        <button class="btn btn-primary" id="preset-modal-save" data-i18n="preset.save"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- History Detail Modal -->
+  <div class="modal-overlay hidden" id="history-modal">
+    <div class="modal modal-wide">
+      <div class="history-detail">
+        <div class="history-detail-image">
+          <img id="history-detail-img" src="" alt="">
+        </div>
+        <div class="history-detail-info">
+          <div class="history-detail-meta" id="history-detail-meta"></div>
+          <div class="history-detail-prompt" id="history-detail-prompt"></div>
+          <div class="history-detail-actions">
+            <button class="btn btn-secondary" id="history-detail-fav" data-i18n="history.favorite"></button>
+            <button class="btn btn-primary" id="history-reuse-prompt" data-i18n="history.reuse_prompt"></button>
+            <button class="btn btn-secondary" id="history-load-to-slot" data-i18n="history.load_to_slot"></button>
+            <button class="btn btn-secondary" id="history-detail-close" data-i18n="history.close"></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm dialog -->
+  <div class="modal-overlay hidden" id="confirm-modal">
+    <div class="modal" style="max-width:380px">
+      <h2 id="confirm-modal-title"></h2>
+      <p id="confirm-modal-message" style="font-size:14px;color:var(--text-secondary);margin-bottom:20px"></p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="confirm-modal-cancel"></button>
+        <button class="btn btn-primary" id="confirm-modal-ok"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Image lightbox -->
+  <div class="modal-overlay hidden" id="image-lightbox" style="cursor:zoom-out">
+    <img id="lightbox-img" src="" alt="" style="max-width:90vw;max-height:90vh;object-fit:contain;border-radius:var(--radius-md)">
+  </div>
+
+  <!-- Toast container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="i18n.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>
