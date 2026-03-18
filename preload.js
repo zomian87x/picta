@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // API Key
   setApiKey: (key) => ipcRenderer.invoke('set-api-key', key),
+  getMaskedApiKey: () => ipcRenderer.invoke('get-masked-api-key'),
 
   // Presets
   getPresets: () => ipcRenderer.invoke('get-presets'),

@@ -23,7 +23,7 @@
   --radius-md: 10px;
   --radius-lg: 14px;
   --transition: 0.2s ease;
-  --titlebar-height: 28px;
+  --titlebar-height: 38px;
   --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
 }
 
@@ -432,6 +432,31 @@ select {
 .gallery-item:hover { box-shadow: var(--shadow-md); }
 .gallery-item.selected { outline: 3px solid var(--accent); outline-offset: -3px; }
 
+.gallery-item--loading,
+.gallery-item--error {
+  aspect-ratio: 1;
+}
+
+.gallery-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.gallery-placeholder-label {
+  opacity: 0.7;
+}
+
+.gallery-item--error .gallery-placeholder {
+  color: var(--danger, #e55);
+}
+
 .gallery-item img {
   width: 100%;
   display: block;
@@ -586,8 +611,73 @@ select {
 }
 
 .history-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-date-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-date-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition);
+  width: 100%;
+  text-align: left;
+}
+.history-date-header:hover { background: var(--bg-tertiary); }
+
+.history-date-chevron {
+  font-size: 10px;
+  transition: transform 0.2s ease;
+  color: var(--text-tertiary);
+}
+.history-date-header.collapsed .history-date-chevron {
+  transform: rotate(-90deg);
+}
+
+.history-date-count {
+  color: var(--text-tertiary);
+  font-weight: 400;
+  font-size: 12px;
+}
+
+.history-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.history-size-slider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.history-size-icon { opacity: 0.5; color: var(--text-secondary); flex-shrink: 0; }
+.history-size-slider input[type="range"] {
+  width: 100px;
+  accent-color: var(--accent);
+}
+
+.history-date-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--history-thumb-size, 220px), 1fr));
   gap: 14px;
 }
 

@@ -102,6 +102,12 @@ function getApiKey() {
   }
 }
 
+function getMaskedApiKey() {
+  const key = getApiKey();
+  if (!key || key.length < 8) return null;
+  return key.slice(0, 4) + '••••' + key.slice(-4);
+}
+
 function setApiKey(key) {
   if (!safeStorage.isEncryptionAvailable()) {
     return { ok: false, reason: 'secure-storage-unavailable' };
@@ -138,7 +144,7 @@ function createWindow() {
 
   if (isMac) {
     windowOptions.titleBarStyle = 'hiddenInset';
-    windowOptions.trafficLightPosition = { x: 15, y: 15 };
+    windowOptions.trafficLightPosition = { x: 15, y: 12 };
   }
 
   mainWindow = new BrowserWindow(windowOptions);
@@ -216,6 +222,9 @@ function createWindow() {
 app.whenReady().then(() => {
   logger = new Logger(path.join(app.getPath('userData'), 'logs'));
   logger.info('App started', { version: app.getVersion(), platform: process.platform });
+  if (isMac && app.dock) {
+    app.dock.setIcon(path.join(__dirname, 'assets', 'icon.png'));
+  }
   initStores();
   createWindow();
   initAutoUpdater();
@@ -277,6 +286,7 @@ ipcMain.handle('set-api-key', (_event, key) => {
     return { ok: false, reason: 'save-failed' };
   }
 });
+ipcMain.handle('get-masked-api-key', () => getMaskedApiKey());
 
 // Prompt presets
 ipcMain.handle('get-presets', () => store.get('promptPresets'));

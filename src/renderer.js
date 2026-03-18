@@ -47,9 +47,7 @@ async function init() {
   $('#setting-resolution').value = config.resolution || '2K';
   $('#setting-slot-count').value = config.imageSlotCount;
   $('#save-path-display').textContent = config.defaultSavePath;
-  $('#api-key-status').textContent = config.hasApiKey
-    ? t('settings.api_key_status_set')
-    : t('settings.api_key_status_unset');
+  updateApiKeyStatus();
   $('#setting-sound-type').value = config.notificationSoundType || 'default';
 
   if (config.notificationSound) {
@@ -84,6 +82,7 @@ async function init() {
   await loadPresets();
 
   // Load history
+  setupHistoryThumbSize();
   await loadHistory();
 
   // Setup event listeners
@@ -161,6 +160,12 @@ function navigateToPanel(panel) {
   $(`[data-panel="${panel}"]`).classList.add('active');
   $$('.panel').forEach(p => p.classList.remove('active'));
   $(`#panel-${panel}`).classList.add('active');
+}
+
+// ── API Key Status ──
+async function updateApiKeyStatus() {
+  const masked = await window.api.getMaskedApiKey();
+  $('#api-key-status').textContent = masked || t('settings.api_key_status_unset');
 }
 
 // ── Online / Offline ──
@@ -244,6 +249,7 @@ function buildImageSlots(count) {
     slot.addEventListener('dragleave', () => slot.classList.remove('drag-over'));
     slot.addEventListener('drop', (e) => {
       e.preventDefault();
+      e.stopPropagation();
       slot.classList.remove('drag-over');
       const file = e.dataTransfer.files[0];
       if (file && file.type.startsWith('image/')) loadImageToSlot(i, file);
@@ -437,53 +443,96 @@ async function handleGenerate() {
   btn.innerHTML = `<span class="spinner"></span> ${t('generate.generating')}`;
 
   $('#output-empty').classList.add('hidden');
-  $('#output-gallery').classList.remove('hidden');
-  $('#output-gallery').innerHTML = `<div class="loading-overlay"><span class="spinner"></span><span>${t('generate.generating')}</span></div>`;
+  const gallery = $('#output-gallery');
+  gallery.classList.remove('hidden');
+  gallery.innerHTML = '';
   $('#generation-log').classList.remove('hidden');
   $('#generation-log').textContent = t('log.start', modelAlias, inputImages.length);
 
   const isEdit = inputImages.length > 0;
   const operation = isEdit ? t('log.operation_edit') : t('log.operation_generate');
-  generatedImages = [];
+  generatedImages = new Array(count).fill(null);
+
+  // Create placeholder slots with loading spinners
+  for (let i = 0; i < count; i++) {
+    const item = document.createElement('div');
+    item.className = 'gallery-item gallery-item--loading';
+    item.dataset.index = i;
+    item.innerHTML = `
+      <div class="gallery-placeholder">
+        <span class="spinner"></span>
+        <span class="gallery-placeholder-label">${i + 1} / ${count}</span>
+      </div>
+    `;
+    gallery.appendChild(item);
+  }
+  bindGalleryEvents();
 
   try {
-    for (let i = 0; i < count; i++) {
-      const logEl = $('#generation-log');
-      logEl.textContent += t('log.generating_n', i + 1, count);
-
-      let result;
-      if (isEdit) {
-        result = await window.api.editImage({ images: inputImages, prompt, aspectRatio, imageSize: resolution, modelAlias });
-      } else {
-        result = await window.api.generateImage({ prompt, aspectRatio, imageSize: resolution, modelAlias });
-      }
-
-      if (result.image) {
-        generatedImages.push(result.image);
-        logEl.textContent += ` \u2713`;
-      } else {
-        logEl.textContent += ` \u2717 ${result.text || 'Failed'}`;
-      }
-    }
-
-    renderGallery();
-
+    const STAGGER_DELAY_MS = 200;
     const logEl = $('#generation-log');
+
+    // Launch all requests in parallel with staggered starts to avoid rate limits
+    const promises = Array.from({ length: count }, (_, i) => {
+      return new Promise(resolve => setTimeout(resolve, i * STAGGER_DELAY_MS))
+        .then(() => {
+          logEl.textContent += t('log.generating_n', i + 1, count);
+          if (isEdit) {
+            return window.api.editImage({ images: inputImages, prompt, aspectRatio, imageSize: resolution, modelAlias });
+          } else {
+            return window.api.generateImage({ prompt, aspectRatio, imageSize: resolution, modelAlias });
+          }
+        })
+        .then(result => {
+          const slot = gallery.querySelector(`.gallery-item[data-index="${i}"]`);
+          if (result.image) {
+            generatedImages[i] = result.image;
+            logEl.textContent += ` [${i + 1}]\u2713`;
+            if (slot) {
+              slot.classList.remove('gallery-item--loading');
+              slot.innerHTML = `
+                <img src="data:${result.image.mimeType};base64,${result.image.base64}" alt="Generated ${i + 1}">
+                <div class="gallery-actions">
+                  <button data-action="copy" data-index="${i}" title="${t('toast.copied')}">📋</button>
+                  <button data-action="save" data-index="${i}" title="${t('toast.saved', '')}">💾</button>
+                </div>
+              `;
+            }
+          } else {
+            logEl.textContent += ` [${i + 1}]\u2717 ${result.text || 'Failed'}`;
+            if (slot) {
+              slot.classList.remove('gallery-item--loading');
+              slot.classList.add('gallery-item--error');
+              slot.innerHTML = `<div class="gallery-placeholder"><span class="gallery-placeholder-label">\u2717 ${result.text || 'Failed'}</span></div>`;
+            }
+          }
+        });
+    });
+
+    await Promise.all(promises);
+
+    // Filter out nulls (failed generations)
+    generatedImages = generatedImages.filter(Boolean);
+
     logEl.textContent += t('log.complete', operation, generatedImages.length, count);
 
     if (generatedImages.length > 0) {
-      const entry = {
-        timestamp: new Date().toISOString(),
-        prompt: rawPrompt,
-        modelAlias,
-        operation,
-        aspectRatio,
-        resolution,
-        imageCount: generatedImages.length,
-        thumbnail: generatedImages[0].base64.substring(0, 2000),
-        thumbnailFull: generatedImages[0].base64,
-      };
-      await window.api.addHistory(entry);
+      const baseTimestamp = Date.now();
+      for (let hi = 0; hi < generatedImages.length; hi++) {
+        const entry = {
+          timestamp: new Date(baseTimestamp + hi).toISOString(),
+          prompt: rawPrompt,
+          modelAlias,
+          operation,
+          aspectRatio,
+          resolution,
+          imageCount: 1,
+          thumbnail: generatedImages[hi].base64.substring(0, 2000),
+          thumbnailFull: generatedImages[hi].base64,
+        };
+        await window.api.addHistory(entry);
+      }
+      await loadHistory();
 
       // Auto-save if enabled
       if (config.autoSaveGenerated) {
@@ -522,24 +571,12 @@ async function handleGenerate() {
 
 let selectedImageIndex = -1;
 
-function renderGallery() {
-  const gallery = $('#output-gallery');
-  gallery.innerHTML = '';
+let galleryListenerBound = false;
 
-  for (let i = 0; i < generatedImages.length; i++) {
-    const img = generatedImages[i];
-    const item = document.createElement('div');
-    item.className = 'gallery-item';
-    item.dataset.index = i;
-    item.innerHTML = `
-      <img src="data:${img.mimeType};base64,${img.base64}" alt="Generated ${i + 1}">
-      <div class="gallery-actions">
-        <button data-action="copy" data-index="${i}" title="${t('toast.copied')}">📋</button>
-        <button data-action="save" data-index="${i}" title="${t('toast.saved', '')}">💾</button>
-      </div>
-    `;
-    gallery.appendChild(item);
-  }
+function bindGalleryEvents() {
+  const gallery = $('#output-gallery');
+  if (galleryListenerBound) return;
+  galleryListenerBound = true;
 
   gallery.addEventListener('click', async (e) => {
     const btn = e.target.closest('button[data-action]');
@@ -566,6 +603,28 @@ function renderGallery() {
       selectedImageIndex = idx;
     }
   });
+}
+
+function renderGallery() {
+  const gallery = $('#output-gallery');
+  gallery.innerHTML = '';
+
+  for (let i = 0; i < generatedImages.length; i++) {
+    const img = generatedImages[i];
+    const item = document.createElement('div');
+    item.className = 'gallery-item';
+    item.dataset.index = i;
+    item.innerHTML = `
+      <img src="data:${img.mimeType};base64,${img.base64}" alt="Generated ${i + 1}">
+      <div class="gallery-actions">
+        <button data-action="copy" data-index="${i}" title="${t('toast.copied')}">📋</button>
+        <button data-action="save" data-index="${i}" title="${t('toast.saved', '')}">💾</button>
+      </div>
+    `;
+    gallery.appendChild(item);
+  }
+
+  bindGalleryEvents();
 }
 
 async function saveImage(base64, defaultName) {
@@ -835,12 +894,33 @@ async function loadHistory() {
   renderHistoryGrid();
 }
 
+const collapsedDates = new Set();
+
+function setupHistoryThumbSize() {
+  const slider = $('#history-thumb-size');
+  const saved = localStorage.getItem('historyThumbColumns');
+  if (saved) slider.value = Math.max(4, Math.min(12, saved));
+  applyHistoryThumbSize(slider.value);
+  slider.addEventListener('input', (e) => {
+    applyHistoryThumbSize(e.target.value);
+    localStorage.setItem('historyThumbColumns', e.target.value);
+  });
+}
+
+function applyHistoryThumbSize(columns) {
+  const grid = $('#history-grid');
+  // columns=6 → large thumbs, columns=12 → small thumbs
+  // Calculate minmax value: divide a reference width by column count
+  const minWidth = Math.round(1200 / columns);
+  grid.style.setProperty('--history-thumb-size', `${minWidth}px`);
+}
+
 function renderHistoryGrid() {
   const grid = $('#history-grid');
   const empty = $('#history-empty');
 
-  // Remove old cards but keep empty state element
-  grid.querySelectorAll('.history-card').forEach(c => c.remove());
+  // Remove old sections and cards but keep empty state element
+  grid.querySelectorAll('.history-date-section').forEach(s => s.remove());
 
   let filtered = showFavoritesOnly
     ? historyEntries.filter(e => e.favorite)
@@ -856,38 +936,75 @@ function renderHistoryGrid() {
 
   empty.classList.add('hidden');
 
+  // Group by date (newest first)
+  const grouped = new Map();
   for (const entry of filtered.slice().reverse()) {
-    const card = document.createElement('div');
-    card.className = 'history-card';
-    const thumbSrc = entry.thumbnailFull
-      ? `data:image/png;base64,${entry.thumbnailFull}`
-      : '';
+    const dateKey = new Date(entry.timestamp).toLocaleDateString('ja-JP', {
+      year: 'numeric', month: 'long', day: 'numeric',
+    });
+    if (!grouped.has(dateKey)) grouped.set(dateKey, []);
+    grouped.get(dateKey).push(entry);
+  }
 
-    card.innerHTML = `
-      ${thumbSrc ? `<img src="${thumbSrc}" alt="History">` : '<div style="aspect-ratio:16/9;background:var(--bg-tertiary)"></div>'}
-      <div class="history-card-meta">
-        <div class="history-card-top">
-          <span class="timestamp">${new Date(entry.timestamp).toLocaleString('ja-JP')}</span>
-          <button class="history-fav-btn ${entry.favorite ? 'active' : ''}" data-timestamp="${entry.timestamp}" title="${t('history.favorite')}">
-            ${entry.favorite ? '★' : '☆'}
-          </button>
-        </div>
-        <div class="prompt-preview">${escapeHtml(entry.prompt)}</div>
-        <span class="model-badge">${escapeHtml(entry.modelAlias)}</span>
-        ${entry.tags && entry.tags.length > 0 ? `<div class="tag-badges">${entry.tags.map(t => `<span class="tag-chip">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
-      </div>
-    `;
+  for (const [dateKey, entries] of grouped) {
+    const collapsed = collapsedDates.has(dateKey);
+    const section = document.createElement('div');
+    section.className = 'history-date-section';
 
-    // Favorite button click
-    card.querySelector('.history-fav-btn').addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const newState = await window.api.toggleHistoryFavorite(entry.timestamp);
-      entry.favorite = newState;
+    const header = document.createElement('button');
+    header.className = `history-date-header${collapsed ? ' collapsed' : ''}`;
+    header.innerHTML = `<span class="history-date-chevron">\u25BC</span> ${dateKey} <span class="history-date-count">(${entries.length})</span>`;
+    header.addEventListener('click', () => {
+      if (collapsedDates.has(dateKey)) {
+        collapsedDates.delete(dateKey);
+      } else {
+        collapsedDates.add(dateKey);
+      }
       renderHistoryGrid();
     });
+    section.appendChild(header);
 
-    card.addEventListener('click', () => openHistoryDetail(entry));
-    grid.appendChild(card);
+    if (!collapsed) {
+      const dateGrid = document.createElement('div');
+      dateGrid.className = 'history-date-grid';
+
+      for (const entry of entries) {
+        const card = document.createElement('div');
+        card.className = 'history-card';
+        const thumbSrc = entry.thumbnailFull
+          ? `data:image/png;base64,${entry.thumbnailFull}`
+          : '';
+
+        card.innerHTML = `
+          ${thumbSrc ? `<img src="${thumbSrc}" alt="History">` : '<div style="aspect-ratio:16/9;background:var(--bg-tertiary)"></div>'}
+          <div class="history-card-meta">
+            <div class="history-card-top">
+              <span class="timestamp">${new Date(entry.timestamp).toLocaleTimeString('ja-JP')}</span>
+              <button class="history-fav-btn ${entry.favorite ? 'active' : ''}" data-timestamp="${entry.timestamp}" title="${t('history.favorite')}">
+                ${entry.favorite ? '★' : '☆'}
+              </button>
+            </div>
+            <div class="prompt-preview">${escapeHtml(entry.prompt)}</div>
+            <span class="model-badge">${escapeHtml(entry.modelAlias)}</span>
+            ${entry.tags && entry.tags.length > 0 ? `<div class="tag-badges">${entry.tags.map(t => `<span class="tag-chip">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+          </div>
+        `;
+
+        card.querySelector('.history-fav-btn').addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const newState = await window.api.toggleHistoryFavorite(entry.timestamp);
+          entry.favorite = newState;
+          renderHistoryGrid();
+        });
+
+        card.addEventListener('click', () => openHistoryDetail(entry));
+        dateGrid.appendChild(card);
+      }
+
+      section.appendChild(dateGrid);
+    }
+
+    grid.appendChild(section);
   }
 }
 
@@ -1090,9 +1207,7 @@ function setupSettings() {
     applyTranslations();
     // Re-render dynamic content
     buildImageSlots(config.imageSlotCount);
-    $('#api-key-status').textContent = config.hasApiKey
-      ? t('settings.api_key_status_set')
-      : t('settings.api_key_status_unset');
+    updateApiKeyStatus();
     const modKey = platformIsMac ? 'Cmd' : 'Ctrl';
     $('#generate-hint').textContent = t('generate.empty_hint', modKey);
     buildShortcutList();
@@ -1160,7 +1275,7 @@ function setupSettings() {
     }
     config.hasApiKey = true;
     $('#api-key-input').value = '';
-    $('#api-key-status').textContent = t('settings.api_key_status_set');
+    updateApiKeyStatus();
     showToast(t('toast.api_key_saved'), 'success');
   });
 
