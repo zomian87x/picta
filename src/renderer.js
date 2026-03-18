@@ -603,6 +603,16 @@ function bindGalleryEvents() {
       selectedImageIndex = idx;
     }
   });
+
+  // Double-click to open lightbox
+  gallery.addEventListener('dblclick', (e) => {
+    const item = e.target.closest('.gallery-item');
+    if (!item) return;
+    const img = item.querySelector('img');
+    if (!img) return;
+    $('#lightbox-img').src = img.src;
+    $('#image-lightbox').classList.remove('hidden');
+  });
 }
 
 function renderGallery() {
