@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('api', {
   getAllTags: () => ipcRenderer.invoke('get-all-tags'),
 
   // File
+  openFolder: (folderPath) => ipcRenderer.invoke('open-folder', folderPath),
   selectSavePath: () => ipcRenderer.invoke('select-save-path'),
   saveImageDialog: (defaultName) => ipcRenderer.invoke('save-image-dialog', defaultName),
   saveImageFile: (token, base64Data) => ipcRenderer.invoke('save-image-file', token, base64Data),

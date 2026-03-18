@@ -585,6 +585,13 @@ ipcMain.handle('edit-image', async (_event, { images, prompt, aspectRatio, image
   }
 });
 
+// Open folder in Finder / Explorer
+ipcMain.handle('open-folder', (_event, folderPath) => {
+  if (typeof folderPath !== 'string') return false;
+  const resolved = path.resolve(folderPath);
+  return shell.openPath(resolved).then(err => !err);
+});
+
 // Open external link (allowlist: https only)
 ipcMain.handle('open-external', (_event, url) => {
   try {

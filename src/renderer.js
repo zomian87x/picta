@@ -1249,6 +1249,13 @@ function setupSettings() {
     playNotificationSound();
   });
 
+  // Open save folder
+  $('#setting-open-folder-btn').addEventListener('click', () => {
+    if (config.defaultSavePath) {
+      window.api.openFolder(config.defaultSavePath);
+    }
+  });
+
   // Save path
   $('#setting-save-path-btn').addEventListener('click', async () => {
     const path = await window.api.selectSavePath();
@@ -1398,6 +1405,7 @@ async function loadModels() {
 
 function renderModelList() {
   const list = $('#model-list');
+  if (!list) return;
   const models = config.models || {};
   list.innerHTML = '';
   for (const [name, mc] of Object.entries(models)) {
