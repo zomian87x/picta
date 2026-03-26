@@ -517,6 +517,36 @@ async function handleGenerate() {
     logEl.textContent += t('log.complete', operation, generatedImages.length, count);
 
     if (generatedImages.length > 0) {
+      // Auto-save first (before heavy loadHistory) to avoid being blocked
+      if (config.autoSaveGenerated) {
+        for (const img of generatedImages) {
+          try {
+            const sourceImgs = config.saveSourceImages ? inputImages : [];
+            const result = await window.api.autoSaveImage({
+              base64: img.base64,
+              mimeType: img.mimeType || 'image/png',
+              metadata: {
+                prompt: rawPrompt,
+                modelAlias,
+                aspectRatio,
+                resolution,
+                timestamp: new Date().toISOString(),
+                tags: [],
+              },
+              sourceImages: sourceImgs,
+            });
+            if (result.filePath) {
+              showToast(t('toast.auto_saved', result.filePath), 'success');
+            } else if (result.error) {
+              showToast(t('toast.save_failed') + ': ' + result.error, 'error');
+            }
+          } catch (saveErr) {
+            showToast(t('toast.save_failed') + ': ' + saveErr.message, 'error');
+          }
+        }
+      }
+
+      // Add history entries and reload
       const baseTimestamp = Date.now();
       for (let hi = 0; hi < generatedImages.length; hi++) {
         const entry = {
@@ -533,29 +563,6 @@ async function handleGenerate() {
         await window.api.addHistory(entry);
       }
       await loadHistory();
-
-      // Auto-save if enabled
-      if (config.autoSaveGenerated) {
-        for (const img of generatedImages) {
-          const sourceImgs = config.saveSourceImages ? inputImages : [];
-          const result = await window.api.autoSaveImage({
-            base64: img.base64,
-            mimeType: img.mimeType,
-            metadata: {
-              prompt: rawPrompt,
-              modelAlias,
-              aspectRatio,
-              resolution,
-              timestamp: entry.timestamp,
-              tags: [],
-            },
-            sourceImages: sourceImgs,
-          });
-          if (result.filePath) {
-            showToast(t('toast.auto_saved', result.filePath), 'success');
-          }
-        }
-      }
 
       playNotificationSound();
     }
@@ -594,24 +601,20 @@ function bindGalleryEvents() {
       return;
     }
 
-    // Click on gallery item to select it
+    // Click on gallery item to select + open lightbox
     const item = e.target.closest('.gallery-item');
     if (item) {
       const idx = parseInt(item.dataset.index);
       gallery.querySelectorAll('.gallery-item').forEach(el => el.classList.remove('selected'));
       item.classList.add('selected');
       selectedImageIndex = idx;
-    }
-  });
 
-  // Double-click to open lightbox
-  gallery.addEventListener('dblclick', (e) => {
-    const item = e.target.closest('.gallery-item');
-    if (!item) return;
-    const img = item.querySelector('img');
-    if (!img) return;
-    $('#lightbox-img').src = img.src;
-    $('#image-lightbox').classList.remove('hidden');
+      const img = item.querySelector('img');
+      if (img) {
+        $('#lightbox-img').src = img.src;
+        $('#image-lightbox').classList.remove('hidden');
+      }
+    }
   });
 }
 
@@ -1148,6 +1151,13 @@ function setupHistoryModal() {
     } else {
       showToast(t('toast.slots_full'), 'error');
     }
+  });
+
+  $('#history-copy-clipboard').addEventListener('click', async () => {
+    const base64 = $('#history-detail-img').dataset.base64;
+    if (!base64) return;
+    const ok = await window.api.copyImageToClipboard(base64);
+    showToast(ok ? t('toast.copied') : t('toast.copy_failed'), ok ? 'success' : 'error');
   });
 }
 
