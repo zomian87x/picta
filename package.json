@@ -1,6 +1,6 @@
 {
   "name": "picta",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "Picta - Gemini Image Generation Desktop App",
   "main": "main.js",
   "scripts": {
@@ -41,8 +41,8 @@
       "entitlementsInherit": "build/entitlements.mac.inherit.plist",
       "notarize": true,
       "target": [
-        "dmg",
-        "zip"
+        { "target": "dmg", "arch": ["arm64", "x64"] },
+        { "target": "zip", "arch": ["arm64", "x64"] }
       ],
       "icon": "assets/icon.icns"
     },

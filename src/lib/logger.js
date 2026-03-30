@@ -8,12 +8,17 @@ class Logger {
     this.logDir = logDir;
     this.logFile = path.join(logDir, 'picta.log');
     this.maxSize = 5 * 1024 * 1024; // 5MB
+    this._lastRotateCheck = 0;
+    this._rotateIntervalMs = 60000; // check at most once per 60s
     if (!fs.existsSync(logDir)) {
       fs.mkdirSync(logDir, { recursive: true });
     }
   }
 
   _rotate() {
+    const now = Date.now();
+    if (now - this._lastRotateCheck < this._rotateIntervalMs) return;
+    this._lastRotateCheck = now;
     try {
       const stat = fs.statSync(this.logFile);
       if (stat.size > this.maxSize) {

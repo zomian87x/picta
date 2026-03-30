@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { escapeHtml, escapeAttr, computeCanvasDims, transformMentionsForApi } from '../src/lib/renderer-utils.js';
+import {
+  escapeHtml,
+  escapeAttr,
+  computeCanvasDims,
+  transformMentionsForApi,
+  getImageExtensionForMimeType,
+  getLocaleForLanguage,
+} from '../src/lib/renderer-utils.js';
 
 describe('escapeHtml', () => {
   it('escapes angle brackets', () => {
@@ -109,5 +116,27 @@ describe('transformMentionsForApi', () => {
     const result = transformMentionsForApi('@person and @bg', slots, 'en');
     expect(result).toContain("the image labeled 'person'");
     expect(result).toContain("the image labeled 'bg'");
+  });
+});
+
+describe('getImageExtensionForMimeType', () => {
+  it('returns jpg for jpeg images', () => {
+    expect(getImageExtensionForMimeType('image/jpeg')).toBe('jpg');
+  });
+
+  it('falls back to png for other MIME types', () => {
+    expect(getImageExtensionForMimeType('image/png')).toBe('png');
+    expect(getImageExtensionForMimeType('image/webp')).toBe('png');
+  });
+});
+
+describe('getLocaleForLanguage', () => {
+  it('returns en-US for english UI', () => {
+    expect(getLocaleForLanguage('en')).toBe('en-US');
+  });
+
+  it('returns ja-JP for japanese UI and fallback', () => {
+    expect(getLocaleForLanguage('ja')).toBe('ja-JP');
+    expect(getLocaleForLanguage('unknown')).toBe('ja-JP');
   });
 });

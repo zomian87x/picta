@@ -3,7 +3,7 @@
 const MODEL_ALIASES = {
   'nano banana': { model: 'gemini-3-pro-image-preview', thinkingLevel: null },
   'nanobanana 2': { model: 'gemini-3.1-flash-image-preview', thinkingLevel: 'MINIMAL' },
-  'nano banana pro': { model: 'gemini-3-pro-image-preview', thinkingLevel: null },
+  'nano banana pro': { model: 'gemini-3-pro-image-preview', thinkingLevel: 'MEDIUM' },
 };
 
 const ASPECT_RATIOS = {

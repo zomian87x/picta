@@ -185,6 +185,9 @@
     if (safeEntry.thumbnailFull !== undefined) {
       out.thumbnailFull = ensureBase64(safeEntry.thumbnailFull, 'thumbnailFull', 25 * 1024 * 1024);
     }
+    if (safeEntry.thumbnailMimeType !== undefined) {
+      out.thumbnailMimeType = ensureImageMimeType(safeEntry.thumbnailMimeType, 'thumbnailMimeType');
+    }
     return out;
   }
 
@@ -214,11 +217,12 @@
   }
 
   function validateEditRequest(request) {
-    const safeRequest = validateGenerateRequest(request);
-    assert(Array.isArray(request.images), 'images must be an array');
-    assert(request.images.length > 0 && request.images.length <= 3, 'images must contain 1 to 3 items');
-    safeRequest.images = request.images.map((image, index) => validateImagePayload(image, `images[${index}]`));
-    return safeRequest;
+    const safeObj = ensurePlainObject(request, 'request');
+    const out = validateGenerateRequest(safeObj);
+    assert(Array.isArray(safeObj.images), 'images must be an array');
+    assert(safeObj.images.length > 0 && safeObj.images.length <= 3, 'images must contain 1 to 3 items');
+    out.images = safeObj.images.map((image, index) => validateImagePayload(image, `images[${index}]`));
+    return out;
   }
 
   function validateSaveImageRequest(token, base64Data) {
@@ -285,6 +289,10 @@
     return out;
   }
 
+  function validateBase64Image(base64Data) {
+    return ensureBase64(base64Data, 'base64Data', 25 * 1024 * 1024);
+  }
+
   exports.validateConfigSet = validateConfigSet;
   exports.validateApiKey = validateApiKey;
   exports.validatePresetInput = validatePresetInput;
@@ -297,5 +305,6 @@
   exports.validateSaveImageRequest = validateSaveImageRequest;
   exports.validateResizeRequest = validateResizeRequest;
   exports.validateAutoSavePayload = validateAutoSavePayload;
+  exports.validateBase64Image = validateBase64Image;
   exports.toSafePathSegment = toSafePathSegment;
 })(typeof module !== 'undefined' && module.exports ? module.exports : window);

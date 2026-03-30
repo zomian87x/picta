@@ -40,13 +40,28 @@ contextBridge.exposeInMainWorld('api', {
 
   // Theme
   getNativeTheme: () => ipcRenderer.invoke('get-native-theme'),
-  onThemeChanged: (callback) => ipcRenderer.on('theme-changed', (_e, theme) => callback(theme)),
+  onThemeChanged: (callback) => {
+    ipcRenderer.removeAllListeners('theme-changed');
+    ipcRenderer.on('theme-changed', (_e, theme) => callback(theme));
+  },
 
   // Menu events
-  onOpenSettings: (callback) => ipcRenderer.on('open-settings', () => callback()),
-  onSaveImage: (callback) => ipcRenderer.on('save-image', () => callback()),
-  onTriggerGenerate: (callback) => ipcRenderer.on('trigger-generate', () => callback()),
-  onPasteImage: (callback) => ipcRenderer.on('paste-image', () => callback()),
+  onOpenSettings: (callback) => {
+    ipcRenderer.removeAllListeners('open-settings');
+    ipcRenderer.on('open-settings', () => callback());
+  },
+  onSaveImage: (callback) => {
+    ipcRenderer.removeAllListeners('save-image');
+    ipcRenderer.on('save-image', () => callback());
+  },
+  onTriggerGenerate: (callback) => {
+    ipcRenderer.removeAllListeners('trigger-generate');
+    ipcRenderer.on('trigger-generate', () => callback());
+  },
+  onPasteImage: (callback) => {
+    ipcRenderer.removeAllListeners('paste-image');
+    ipcRenderer.on('paste-image', () => callback());
+  },
 
   // Gemini
   generateImage: (params) => ipcRenderer.invoke('generate-image', params),
@@ -71,5 +86,8 @@ contextBridge.exposeInMainWorld('api', {
   // Auto-update
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   openReleasePage: (url) => ipcRenderer.invoke('open-release-page', url),
-  onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (_e, version, url) => callback(version, url)),
+  onUpdateAvailable: (callback) => {
+    ipcRenderer.removeAllListeners('update-available');
+    ipcRenderer.on('update-available', (_e, version, url) => callback(version, url));
+  },
 });

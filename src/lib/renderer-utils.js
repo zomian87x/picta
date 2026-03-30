@@ -44,8 +44,18 @@
     });
   }
 
+  function getImageExtensionForMimeType(mimeType) {
+    return mimeType === 'image/jpeg' ? 'jpg' : 'png';
+  }
+
+  function getLocaleForLanguage(lang) {
+    return lang === 'en' ? 'en-US' : 'ja-JP';
+  }
+
   exports.escapeHtml = escapeHtml;
   exports.escapeAttr = escapeAttr;
   exports.computeCanvasDims = computeCanvasDims;
   exports.transformMentionsForApi = transformMentionsForApi;
+  exports.getImageExtensionForMimeType = getImageExtensionForMimeType;
+  exports.getLocaleForLanguage = getLocaleForLanguage;
 })(typeof module !== 'undefined' && module.exports ? module.exports : window);

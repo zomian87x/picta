@@ -55,6 +55,10 @@ const translations = {
     // History
     'history.title': '履歴',
     'history.clear_all': 'すべて削除',
+    'history.confirm_clear_title': '履歴を削除',
+    'history.confirm_clear_message': 'すべての生成履歴を削除します。この操作は取り消せません。',
+    'history.confirm_clear_ok': '削除する',
+    'history.confirm_clear_cancel': 'キャンセル',
     'history.show_favorites_only': 'お気に入りのみ',
     'history.empty_icon': '📁',
     'history.empty_text': '生成履歴はまだありません',
@@ -263,6 +267,10 @@ const translations = {
 
     'history.title': 'History',
     'history.clear_all': 'Clear All',
+    'history.confirm_clear_title': 'Clear History',
+    'history.confirm_clear_message': 'All generation history will be deleted. This cannot be undone.',
+    'history.confirm_clear_ok': 'Delete',
+    'history.confirm_clear_cancel': 'Cancel',
     'history.show_favorites_only': 'Favorites Only',
     'history.empty_icon': '📁',
     'history.empty_text': 'No generation history yet',

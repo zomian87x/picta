@@ -187,33 +187,37 @@ function updateOnlineStatus(online) {
   isOnline = online;
   const banner = $('#offline-banner');
   const generateBtn = $('[data-panel="generate"]');
-  const canvasBtn = $('[data-panel="canvas"]');
 
   if (!online) {
     banner.classList.remove('hidden');
     generateBtn.classList.add('disabled');
-    canvasBtn.classList.add('disabled');
 
-    // Force to history if on a disabled panel
+    // Force to history if on generate panel (canvas is still usable offline)
     const activePanel = $('.panel.active');
-    if (activePanel && (activePanel.id === 'panel-generate' || activePanel.id === 'panel-canvas')) {
+    if (activePanel && activePanel.id === 'panel-generate') {
       navigateToPanel('history');
     }
   } else {
     banner.classList.add('hidden');
     generateBtn.classList.remove('disabled');
-    canvasBtn.classList.remove('disabled');
   }
 }
 
 // ── Image Slots ──
-function buildImageSlots(count) {
+function buildImageSlots(count, previousSlots = imageSlots) {
   const container = $('#image-slots');
+  const preservedSlots = Array.isArray(previousSlots)
+    ? previousSlots.slice(0, count).map((slot) => ({
+        base64: slot?.base64 || null,
+        mimeType: slot?.mimeType || null,
+        label: slot?.label || '',
+      }))
+    : [];
   container.innerHTML = '';
   imageSlots = [];
 
   for (let i = 0; i < count; i++) {
-    imageSlots.push({ base64: null, mimeType: null, label: '' });
+    imageSlots.push(preservedSlots[i] || { base64: null, mimeType: null, label: '' });
     const slot = document.createElement('div');
     slot.className = 'image-slot';
     slot.dataset.index = i;
@@ -225,6 +229,7 @@ function buildImageSlots(count) {
       <button class="slot-remove hidden" data-remove-index="${i}">\u00d7</button>
       <input type="file" accept="image/*" class="hidden" data-file-index="${i}">
     `;
+    slot.querySelector('input[type="text"]').value = imageSlots[i].label;
 
     slot.addEventListener('click', (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
@@ -256,6 +261,9 @@ function buildImageSlots(count) {
     });
 
     container.appendChild(slot);
+    if (imageSlots[i].base64) {
+      updateSlotUI(i);
+    }
   }
 }
 
@@ -284,11 +292,15 @@ function updateSlotUI(index) {
 
   if (data.base64) {
     slot.classList.add('has-image');
-    placeholder.innerHTML = `<img src="data:${data.mimeType};base64,${data.base64}" alt="Slot ${index + 1}">`;
+    placeholder.textContent = '';
+    const img = document.createElement('img');
+    img.alt = `Slot ${index + 1}`;
+    img.src = `data:${data.mimeType};base64,${data.base64}`;
+    placeholder.appendChild(img);
     removeBtn.classList.remove('hidden');
   } else {
     slot.classList.remove('has-image');
-    placeholder.innerHTML = t('generate.slot_placeholder', index + 1);
+    placeholder.textContent = t('generate.slot_placeholder', index + 1);
     removeBtn.classList.add('hidden');
   }
 }
@@ -446,6 +458,7 @@ async function handleGenerate() {
   const gallery = $('#output-gallery');
   gallery.classList.remove('hidden');
   gallery.innerHTML = '';
+  selectedImageIndex = -1;
   $('#generation-log').classList.remove('hidden');
   $('#generation-log').textContent = t('log.start', modelAlias, inputImages.length);
 
@@ -490,20 +503,32 @@ async function handleGenerate() {
             logEl.textContent += ` [${i + 1}]\u2713`;
             if (slot) {
               slot.classList.remove('gallery-item--loading');
-              slot.innerHTML = `
-                <img src="data:${result.image.mimeType};base64,${result.image.base64}" alt="Generated ${i + 1}">
-                <div class="gallery-actions">
-                  <button data-action="copy" data-index="${i}" title="${t('toast.copied')}">📋</button>
-                  <button data-action="save" data-index="${i}" title="${t('toast.saved', '')}">💾</button>
-                </div>
+              slot.innerHTML = '';
+              const imgEl = document.createElement('img');
+              imgEl.src = `data:${result.image.mimeType};base64,${result.image.base64}`;
+              imgEl.alt = `Generated ${i + 1}`;
+              slot.appendChild(imgEl);
+              const actions = document.createElement('div');
+              actions.className = 'gallery-actions';
+              actions.innerHTML = `
+                <button data-action="copy" data-index="${i}" title="${escapeAttr(t('toast.copied'))}">📋</button>
+                <button data-action="save" data-index="${i}" title="${escapeAttr(t('toast.saved', ''))}">💾</button>
               `;
+              slot.appendChild(actions);
             }
           } else {
             logEl.textContent += ` [${i + 1}]\u2717 ${result.text || 'Failed'}`;
             if (slot) {
               slot.classList.remove('gallery-item--loading');
               slot.classList.add('gallery-item--error');
-              slot.innerHTML = `<div class="gallery-placeholder"><span class="gallery-placeholder-label">\u2717 ${result.text || 'Failed'}</span></div>`;
+              const placeholder = document.createElement('div');
+              placeholder.className = 'gallery-placeholder';
+              const label = document.createElement('span');
+              label.className = 'gallery-placeholder-label';
+              label.textContent = `\u2717 ${result.text || 'Failed'}`;
+              placeholder.appendChild(label);
+              slot.innerHTML = '';
+              slot.appendChild(placeholder);
             }
           }
         });
@@ -511,15 +536,14 @@ async function handleGenerate() {
 
     await Promise.all(promises);
 
-    // Filter out nulls (failed generations)
-    generatedImages = generatedImages.filter(Boolean);
+    const completedImages = generatedImages.filter(Boolean);
 
-    logEl.textContent += t('log.complete', operation, generatedImages.length, count);
+    logEl.textContent += t('log.complete', operation, completedImages.length, count);
 
-    if (generatedImages.length > 0) {
+    if (completedImages.length > 0) {
       // Auto-save first (before heavy loadHistory) to avoid being blocked
       if (config.autoSaveGenerated) {
-        for (const img of generatedImages) {
+        for (const img of completedImages) {
           try {
             const sourceImgs = config.saveSourceImages ? inputImages : [];
             const result = await window.api.autoSaveImage({
@@ -546,9 +570,11 @@ async function handleGenerate() {
         }
       }
 
-      // Add history entries and reload
+      // Add history entries and reload (with compressed thumbnails to keep store small)
       const baseTimestamp = Date.now();
-      for (let hi = 0; hi < generatedImages.length; hi++) {
+      for (let hi = 0; hi < completedImages.length; hi++) {
+        const srcMime = completedImages[hi].mimeType || 'image/png';
+        const thumbBase64 = await createThumbnailBase64(completedImages[hi].base64, srcMime);
         const entry = {
           timestamp: new Date(baseTimestamp + hi).toISOString(),
           prompt: rawPrompt,
@@ -557,8 +583,9 @@ async function handleGenerate() {
           aspectRatio,
           resolution,
           imageCount: 1,
-          thumbnail: generatedImages[hi].base64.substring(0, 2000),
-          thumbnailFull: generatedImages[hi].base64,
+          thumbnail: thumbBase64.substring(0, 2000),
+          thumbnailFull: thumbBase64,
+          thumbnailMimeType: 'image/jpeg',
         };
         await window.api.addHistory(entry);
       }
@@ -596,7 +623,7 @@ function bindGalleryEvents() {
         const ok = await window.api.copyImageToClipboard(img.base64);
         showToast(ok ? t('toast.copied') : t('toast.copy_failed'), ok ? 'success' : 'error');
       } else if (btn.dataset.action === 'save') {
-        await saveImage(img.base64, `picta-${Date.now()}.png`);
+        await saveGeneratedImage(img);
       }
       return;
     }
@@ -624,20 +651,57 @@ function renderGallery() {
 
   for (let i = 0; i < generatedImages.length; i++) {
     const img = generatedImages[i];
+    if (!img) continue;
     const item = document.createElement('div');
     item.className = 'gallery-item';
     item.dataset.index = i;
-    item.innerHTML = `
-      <img src="data:${img.mimeType};base64,${img.base64}" alt="Generated ${i + 1}">
-      <div class="gallery-actions">
-        <button data-action="copy" data-index="${i}" title="${t('toast.copied')}">📋</button>
-        <button data-action="save" data-index="${i}" title="${t('toast.saved', '')}">💾</button>
-      </div>
+
+    const imgEl = document.createElement('img');
+    imgEl.src = `data:${img.mimeType};base64,${img.base64}`;
+    imgEl.alt = `Generated ${i + 1}`;
+    item.appendChild(imgEl);
+
+    const actions = document.createElement('div');
+    actions.className = 'gallery-actions';
+    actions.innerHTML = `
+      <button data-action="copy" data-index="${i}" title="${escapeAttr(t('toast.copied'))}">📋</button>
+      <button data-action="save" data-index="${i}" title="${escapeAttr(t('toast.saved', ''))}">💾</button>
     `;
+    item.appendChild(actions);
     gallery.appendChild(item);
   }
 
   bindGalleryEvents();
+}
+
+function getFirstGeneratedImage() {
+  return generatedImages.find(Boolean) || null;
+}
+
+function createThumbnailBase64(base64, mimeType, maxDim = 512) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+      resolve(dataUrl.split(',')[1]);
+    };
+    img.onerror = () => resolve(base64.substring(0, 5000));
+    img.src = `data:${mimeType || 'image/png'};base64,${base64}`;
+  });
+}
+
+async function saveGeneratedImage(image) {
+  if (!image?.base64) return;
+  const ext = getImageExtensionForMimeType(image.mimeType || 'image/png');
+  await saveImage(image.base64, `picta-${Date.now()}.${ext}`);
 }
 
 async function saveImage(base64, defaultName) {
@@ -931,6 +995,7 @@ function applyHistoryThumbSize(columns) {
 function renderHistoryGrid() {
   const grid = $('#history-grid');
   const empty = $('#history-empty');
+  const locale = getLocaleForLanguage(getLanguage());
 
   // Remove old sections and cards but keep empty state element
   grid.querySelectorAll('.history-date-section').forEach(s => s.remove());
@@ -952,7 +1017,7 @@ function renderHistoryGrid() {
   // Group by date (newest first)
   const grouped = new Map();
   for (const entry of filtered.slice().reverse()) {
-    const dateKey = new Date(entry.timestamp).toLocaleDateString('ja-JP', {
+    const dateKey = new Date(entry.timestamp).toLocaleDateString(locale, {
       year: 'numeric', month: 'long', day: 'numeric',
     });
     if (!grouped.has(dateKey)) grouped.set(dateKey, []);
@@ -984,15 +1049,16 @@ function renderHistoryGrid() {
       for (const entry of entries) {
         const card = document.createElement('div');
         card.className = 'history-card';
+        const historyMimeType = entry.thumbnailMimeType || 'image/png';
         const thumbSrc = entry.thumbnailFull
-          ? `data:image/png;base64,${entry.thumbnailFull}`
+          ? `data:${historyMimeType};base64,${entry.thumbnailFull}`
           : '';
 
         card.innerHTML = `
           ${thumbSrc ? `<img src="${thumbSrc}" alt="History">` : '<div style="aspect-ratio:16/9;background:var(--bg-tertiary)"></div>'}
           <div class="history-card-meta">
             <div class="history-card-top">
-              <span class="timestamp">${new Date(entry.timestamp).toLocaleTimeString('ja-JP')}</span>
+              <span class="timestamp">${new Date(entry.timestamp).toLocaleTimeString(locale)}</span>
               <button class="history-fav-btn ${entry.favorite ? 'active' : ''}" data-timestamp="${entry.timestamp}" title="${t('history.favorite')}">
                 ${entry.favorite ? '★' : '☆'}
               </button>
@@ -1029,7 +1095,7 @@ function renderTagFilter() {
   // Collect all tags
   const tagSet = new Set();
   for (const e of historyEntries) {
-    if (e.tags) e.tags.forEach(t => tagSet.add(t));
+    if (e.tags) e.tags.forEach(tag => tagSet.add(tag));
   }
   if (tagSet.size === 0) return;
 
@@ -1066,7 +1132,7 @@ function renderTagEditor(entry) {
     chip.className = 'tag-chip';
     chip.innerHTML = `${escapeHtml(tag)} <span class="tag-remove">&times;</span>`;
     chip.querySelector('.tag-remove').addEventListener('click', async () => {
-      entry.tags = entry.tags.filter(t => t !== tag);
+      entry.tags = entry.tags.filter(tg => tg !== tag);
       await window.api.updateHistoryTags(entry.timestamp, entry.tags);
       renderTagEditor(entry);
       renderTagFilter();
@@ -1106,10 +1172,16 @@ $('#history-filter-favorites')?.addEventListener('click', () => {
   renderHistoryGrid();
 });
 
-$('#history-clear')?.addEventListener('click', async () => {
-  await window.api.clearHistory();
-  await loadHistory();
-  showToast(t('toast.history_cleared'), 'success');
+$('#history-clear')?.addEventListener('click', () => {
+  showConfirmDialog(
+    t('history.confirm_clear_title'),
+    t('history.confirm_clear_message'),
+    async () => {
+      await window.api.clearHistory();
+      await loadHistory();
+      showToast(t('toast.history_cleared'), 'success');
+    }
+  );
 });
 
 // ── History Detail Modal ──
@@ -1139,11 +1211,12 @@ function setupHistoryModal() {
 
   $('#history-load-to-slot').addEventListener('click', () => {
     const base64 = $('#history-detail-img').dataset.base64;
+    const mimeType = $('#history-detail-img').dataset.mimeType || 'image/png';
     if (!base64) return;
     const idx = imageSlots.findIndex(s => !s.base64);
     if (idx >= 0) {
       imageSlots[idx].base64 = base64;
-      imageSlots[idx].mimeType = 'image/png';
+      imageSlots[idx].mimeType = mimeType;
       updateSlotUI(idx);
       navigateToPanel('generate');
       closeHistoryModal();
@@ -1169,18 +1242,22 @@ function openHistoryDetail(entry) {
   const img = $('#history-detail-img');
   const meta = $('#history-detail-meta');
   const promptEl = $('#history-detail-prompt');
+  const historyMimeType = entry.thumbnailMimeType || 'image/png';
+  const locale = getLocaleForLanguage(getLanguage());
 
   if (entry.thumbnailFull) {
-    img.src = `data:image/png;base64,${entry.thumbnailFull}`;
+    img.src = `data:${historyMimeType};base64,${entry.thumbnailFull}`;
     img.dataset.base64 = entry.thumbnailFull;
+    img.dataset.mimeType = historyMimeType;
   } else {
     img.src = '';
     img.dataset.base64 = '';
+    img.dataset.mimeType = '';
   }
 
   meta.innerHTML = `
     <div><strong>${t('history.model')}:</strong> ${escapeHtml(entry.modelAlias)}</div>
-    <div><strong>${t('history.date')}:</strong> ${new Date(entry.timestamp).toLocaleString('ja-JP')}</div>
+    <div><strong>${t('history.date')}:</strong> ${new Date(entry.timestamp).toLocaleString(locale)}</div>
     <div><strong>${t('history.aspect_ratio')}:</strong> ${escapeHtml(entry.aspectRatio || '-')}</div>
     <div><strong>${t('history.resolution')}:</strong> ${escapeHtml(entry.resolution || '-')}</div>
     <div><strong>${t('history.images_count')}:</strong> ${entry.imageCount || 1}</div>
@@ -1226,12 +1303,17 @@ function setupSettings() {
     setLanguage(e.target.value);
     applyTranslations();
     // Re-render dynamic content
-    buildImageSlots(config.imageSlotCount);
+    buildImageSlots(config.imageSlotCount, imageSlots);
     updateApiKeyStatus();
     const modKey = platformIsMac ? 'Cmd' : 'Ctrl';
     $('#generate-hint').textContent = t('generate.empty_hint', modKey);
     buildShortcutList();
     buildHelpContent();
+    renderTagFilter();
+    renderHistoryGrid();
+    if (currentDetailEntry && !$('#history-modal').classList.contains('hidden')) {
+      openHistoryDetail(currentDetailEntry);
+    }
   });
 
   // Model
@@ -1251,7 +1333,7 @@ function setupSettings() {
     const count = parseInt(e.target.value);
     config.imageSlotCount = count;
     await window.api.setConfig('imageSlotCount', count);
-    buildImageSlots(count);
+    buildImageSlots(count, imageSlots);
   });
 
   // Notification sound toggle
@@ -1466,8 +1548,10 @@ function setupKeyboardShortcuts() {
     }
     if ((e.metaKey || e.ctrlKey) && e.key === 's') {
       e.preventDefault();
-      if (generatedImages.length > 0) {
-        await saveImage(generatedImages[0].base64, `picta-${Date.now()}.png`);
+      const selectedImg = selectedImageIndex >= 0 ? generatedImages[selectedImageIndex] : null;
+      const targetImg = selectedImg || getFirstGeneratedImage();
+      if (targetImg) {
+        await saveGeneratedImage(targetImg);
       }
     }
   });
@@ -1478,8 +1562,9 @@ function setupMenuEvents() {
   window.api.onOpenSettings(() => navigateToPanel('settings'));
 
   window.api.onSaveImage(async () => {
-    if (generatedImages.length > 0) {
-      await saveImage(generatedImages[0].base64, `picta-${Date.now()}.png`);
+    const firstImage = getFirstGeneratedImage();
+    if (firstImage) {
+      await saveGeneratedImage(firstImage);
     }
   });
 

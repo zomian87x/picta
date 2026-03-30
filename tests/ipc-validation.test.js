@@ -30,10 +30,12 @@ describe('validateHistoryEntry', () => {
       imageCount: 1,
       tags: ['tag-a', 'tag-a', 'tag-b'],
       thumbnail: 'QUJDRA==',
+      thumbnailMimeType: 'image/jpeg',
     });
 
     expect(entry.tags).toEqual(['tag-a', 'tag-b']);
     expect(entry.thumbnail).toBe('QUJDRA==');
+    expect(entry.thumbnailMimeType).toBe('image/jpeg');
   });
 });
 

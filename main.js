@@ -26,6 +26,7 @@ const {
   validateSaveImageRequest,
   validateResizeRequest,
   validateAutoSavePayload,
+  validateBase64Image,
   toSafePathSegment,
 } = require('./src/lib/ipc-validation');
 
@@ -53,7 +54,7 @@ function initStores() {
       models: {
         'nano banana': { model: 'gemini-3-pro-image-preview', thinkingLevel: null },
         'nanobanana 2': { model: 'gemini-3.1-flash-image-preview', thinkingLevel: 'MINIMAL' },
-        'nano banana pro': { model: 'gemini-3-pro-image-preview', thinkingLevel: null },
+        'nano banana pro': { model: 'gemini-3-pro-image-preview', thinkingLevel: 'MEDIUM' },
       },
       promptPresets: {
         '線画（トーンなし）': `画像編集をしてください。与えられた画像をもとに、次のような画像を作ってください。\n\n白い紙に純粋な黒インクの線のみで描かれた漫画の背景イラスト。\n線は綺麗で鮮明。\nパースは元画像から変更しない。\n使用するのは黒インクの線のみ。\nトーン・スクリーントーン・ドットパターン・グレー塗り・グラデーションは使用禁止。\n奥行きを示すために最低限のハッチングのみ使用可。\n背景のみでキャラクターは含まない。\n画像内の文字・テキスト・看板の文字などは全て消去する。\nシャープで印刷可能な品質。`,
@@ -428,8 +429,16 @@ ipcMain.handle('save-image-file', async (_event, token, base64Data) => {
   if (!filePath) return false;
   approvedSavePaths.delete(validated.token);
   try {
-    const buffer = Buffer.from(validated.base64Data, 'base64');
-    fs.writeFileSync(filePath, buffer);
+    const inputBuffer = Buffer.from(validated.base64Data, 'base64');
+    const image = nativeImage.createFromBuffer(inputBuffer);
+    if (image.isEmpty()) {
+      return false;
+    }
+    const ext = path.extname(filePath).toLowerCase();
+    const outputBuffer = ext === '.jpg' || ext === '.jpeg'
+      ? image.toJPEG(90)
+      : image.toPNG();
+    fs.writeFileSync(filePath, outputBuffer);
     return true;
   } catch (e) {
     return false;
@@ -496,7 +505,8 @@ ipcMain.handle('auto-save-image', async (_event, { base64, mimeType, metadata, s
 // Clipboard
 ipcMain.handle('copy-image-to-clipboard', (_event, base64Data) => {
   try {
-    const buffer = Buffer.from(validateSaveImageRequest(crypto.randomUUID(), base64Data).base64Data, 'base64');
+    const validated = validateBase64Image(base64Data);
+    const buffer = Buffer.from(validated, 'base64');
     const img = nativeImage.createFromBuffer(buffer);
     clipboard.writeImage(img);
     return true;
@@ -585,10 +595,15 @@ ipcMain.handle('edit-image', async (_event, { images, prompt, aspectRatio, image
   }
 });
 
-// Open folder in Finder / Explorer
+// Open folder in Finder / Explorer (restricted to save path)
 ipcMain.handle('open-folder', (_event, folderPath) => {
   if (typeof folderPath !== 'string') return false;
   const resolved = path.resolve(folderPath);
+  const allowedBase = path.resolve(store.get('defaultSavePath', app.getPath('pictures')));
+  if (resolved !== allowedBase && !resolved.startsWith(allowedBase + path.sep)) {
+    if (logger) logger.warn('open-folder blocked: path outside save directory', { resolved, allowedBase });
+    return false;
+  }
   return shell.openPath(resolved).then(err => !err);
 });
 
@@ -646,6 +661,19 @@ ipcMain.handle('resize-image', (_event, base64, mimeType, maxLongEdge) => {
 });
 
 // ── Update Check (GitHub Releases) ──
+function isNewerVersion(latest, current) {
+  const parse = (v) => v.split('.').map(Number);
+  const l = parse(latest);
+  const c = parse(current);
+  for (let i = 0; i < Math.max(l.length, c.length); i++) {
+    const lv = l[i] || 0;
+    const cv = c[i] || 0;
+    if (lv > cv) return true;
+    if (lv < cv) return false;
+  }
+  return false;
+}
+
 async function checkForUpdateFromGitHub() {
   try {
     const { net } = require('electron');
@@ -657,7 +685,7 @@ async function checkForUpdateFromGitHub() {
     const data = await response.json();
     const latestVersion = (data.tag_name || '').replace(/^v/, '');
     const currentVersion = app.getVersion();
-    if (latestVersion && latestVersion !== currentVersion) {
+    if (latestVersion && isNewerVersion(latestVersion, currentVersion)) {
       return { version: latestVersion, url: data.html_url };
     }
     return null;
