@@ -111,10 +111,9 @@ function sanitizeDefaultFileName(defaultName) {
   return cleaned || fallback;
 }
 
-// ── API Key encryption (safeStorage with AES-256-GCM fallback) ──
+// ── API Key encryption (AES-256-GCM, no OS keychain dependency) ──
 
 function deriveAppKey() {
-  // Machine-specific seed: userData path is unique per OS user + app
   const seed = app.getPath('userData') + '::picta-key-salt::' + require('os').userInfo().username;
   return crypto.createHash('sha256').update(seed).digest();
 }
@@ -125,7 +124,6 @@ function aesEncrypt(plaintext) {
   const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
   const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
   const tag = cipher.getAuthTag();
-  // Store as: iv(12) + tag(16) + ciphertext
   return Buffer.concat([iv, tag, encrypted]).toString('base64');
 }
 
@@ -140,17 +138,17 @@ function aesDecrypt(encoded) {
   return decipher.update(encrypted, undefined, 'utf8') + decipher.final('utf8');
 }
 
-function useSafeStorage() {
-  return safeStorage.isEncryptionAvailable();
-}
-
 function getApiKey() {
   try {
-    if (useSafeStorage()) {
-      const encrypted = store.get('apiKeyEncrypted');
-      if (!encrypted) return null;
-      const buffer = Buffer.from(encrypted, 'base64');
-      return safeStorage.decryptString(buffer);
+    // Migrate: read old safeStorage key if present
+    const legacyEncrypted = store.get('apiKeyEncrypted');
+    if (legacyEncrypted && safeStorage.isEncryptionAvailable()) {
+      const buffer = Buffer.from(legacyEncrypted, 'base64');
+      const key = safeStorage.decryptString(buffer);
+      // Re-save as AES and remove legacy
+      store.set('apiKeyAes', aesEncrypt(key));
+      store.delete('apiKeyEncrypted');
+      return key;
     }
     const encoded = store.get('apiKeyAes');
     if (!encoded) return null;
@@ -168,14 +166,8 @@ function getMaskedApiKey() {
 
 function setApiKey(key) {
   try {
-    if (useSafeStorage()) {
-      const encrypted = safeStorage.encryptString(key);
-      store.set('apiKeyEncrypted', encrypted.toString('base64'));
-      store.delete('apiKeyAes');
-    } else {
-      store.set('apiKeyAes', aesEncrypt(key));
-      store.delete('apiKeyEncrypted');
-    }
+    store.set('apiKeyAes', aesEncrypt(key));
+    store.delete('apiKeyEncrypted');
     return { ok: true };
   } catch {
     return { ok: false, reason: 'save-failed' };
