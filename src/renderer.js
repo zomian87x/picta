@@ -715,7 +715,7 @@ async function saveImage(base64, defaultName) {
 // ── Canvas ──
 let drawCtx = null;
 let isDrawing = false;
-const MAX_UNDO = 15;
+const MAX_UNDO = 10;
 
 function setupCanvas() {
   const canvas = $('#draw-canvas');
@@ -839,7 +839,7 @@ function setupCanvas() {
 
 function pushCanvasUndo() {
   const canvas = $('#draw-canvas');
-  canvasUndoStack.push(canvas.toDataURL('image/png'));
+  canvasUndoStack.push(canvas.toDataURL('image/jpeg', 0.5));
   if (canvasUndoStack.length > MAX_UNDO) {
     canvasUndoStack.shift();
   }

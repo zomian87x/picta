@@ -111,12 +111,50 @@ function sanitizeDefaultFileName(defaultName) {
   return cleaned || fallback;
 }
 
+// ── API Key encryption (safeStorage with AES-256-GCM fallback) ──
+
+function deriveAppKey() {
+  // Machine-specific seed: userData path is unique per OS user + app
+  const seed = app.getPath('userData') + '::picta-key-salt::' + require('os').userInfo().username;
+  return crypto.createHash('sha256').update(seed).digest();
+}
+
+function aesEncrypt(plaintext) {
+  const key = deriveAppKey();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  // Store as: iv(12) + tag(16) + ciphertext
+  return Buffer.concat([iv, tag, encrypted]).toString('base64');
+}
+
+function aesDecrypt(encoded) {
+  const key = deriveAppKey();
+  const buf = Buffer.from(encoded, 'base64');
+  const iv = buf.subarray(0, 12);
+  const tag = buf.subarray(12, 28);
+  const encrypted = buf.subarray(28);
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(tag);
+  return decipher.update(encrypted, undefined, 'utf8') + decipher.final('utf8');
+}
+
+function useSafeStorage() {
+  return safeStorage.isEncryptionAvailable();
+}
+
 function getApiKey() {
   try {
-    const encrypted = store.get('apiKeyEncrypted');
-    if (!encrypted) return null;
-    const buffer = Buffer.from(encrypted, 'base64');
-    return safeStorage.decryptString(buffer);
+    if (useSafeStorage()) {
+      const encrypted = store.get('apiKeyEncrypted');
+      if (!encrypted) return null;
+      const buffer = Buffer.from(encrypted, 'base64');
+      return safeStorage.decryptString(buffer);
+    }
+    const encoded = store.get('apiKeyAes');
+    if (!encoded) return null;
+    return aesDecrypt(encoded);
   } catch {
     return null;
   }
@@ -129,12 +167,15 @@ function getMaskedApiKey() {
 }
 
 function setApiKey(key) {
-  if (!safeStorage.isEncryptionAvailable()) {
-    return { ok: false, reason: 'secure-storage-unavailable' };
-  }
   try {
-    const encrypted = safeStorage.encryptString(key);
-    store.set('apiKeyEncrypted', encrypted.toString('base64'));
+    if (useSafeStorage()) {
+      const encrypted = safeStorage.encryptString(key);
+      store.set('apiKeyEncrypted', encrypted.toString('base64'));
+      store.delete('apiKeyAes');
+    } else {
+      store.set('apiKeyAes', aesEncrypt(key));
+      store.delete('apiKeyEncrypted');
+    }
     return { ok: true };
   } catch {
     return { ok: false, reason: 'save-failed' };

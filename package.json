@@ -1,6 +1,6 @@
 {
   "name": "picta",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Picta - Gemini Image Generation Desktop App",
   "main": "main.js",
   "scripts": {
